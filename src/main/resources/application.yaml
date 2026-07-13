@@ -4,3 +4,14 @@ server:
 spring:
     application:
         name: iflow-sentinel
+    jpa:
+        hibernate:
+            ddl-auto: update
+        show-sql: true
+        properties:
+            hibernate:
+                format_sql: true
+
+iflow-sentinel:
+    security:
+        credential-key: ${CREDENTIAL_ENCRYPTION_KEY:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
