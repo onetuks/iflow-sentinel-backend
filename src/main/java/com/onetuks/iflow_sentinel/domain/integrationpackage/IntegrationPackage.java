@@ -1,8 +1,6 @@
 package com.onetuks.iflow_sentinel.domain.integrationpackage;
 
-import com.onetuks.iflow_sentinel.domain.artifact.Artifact;
-import com.onetuks.iflow_sentinel.domain.project.Project;
-import jakarta.persistence.CascadeType;
+import com.onetuks.iflow_sentinel.domain.tenant.Tenant;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -11,9 +9,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToMany;
-import java.util.ArrayList;
-import java.util.List;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -29,8 +24,8 @@ public class IntegrationPackage {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "project_id")
-    private Project project;
+    @JoinColumn(name = "tenant_id")
+    private Tenant tenant;
 
     @Column(nullable = false, unique = true)
     private String sapPackageId;
@@ -38,21 +33,10 @@ public class IntegrationPackage {
     @Column(nullable = false)
     private String name;
 
-    @OneToMany(mappedBy = "integrationPackage", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Artifact> artifacts = new ArrayList<>();
-
     @Builder
-    public IntegrationPackage(String sapPackageId, String name) {
+    public IntegrationPackage(Tenant tenant, String sapPackageId, String name) {
+        this.tenant = tenant;
         this.sapPackageId = sapPackageId;
         this.name = name;
-    }
-
-    public void assignProject(Project project) {
-        this.project = project;
-    }
-
-    public void addArtifact(Artifact artifact) {
-        artifacts.add(artifact);
-        artifact.assignIntegrationPackage(this);
     }
 }

@@ -1,13 +1,17 @@
 package com.onetuks.iflow_sentinel.domain.tenant;
 
+import com.onetuks.iflow_sentinel.domain.project.Project;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -21,6 +25,10 @@ public class Tenant {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "project_id")
+    private Project project;
 
     @Column(nullable = false)
     private String name;
@@ -45,12 +53,14 @@ public class Tenant {
 
     @Builder
     public Tenant(
+            Project project,
             String name,
             String odataUrl,
             TenantPlatform platformType,
             TenantAuthType authType,
             String clientId,
             String clientSecret) {
+        this.project = project;
         this.name = name;
         this.odataUrl = odataUrl;
         this.platformType = platformType;

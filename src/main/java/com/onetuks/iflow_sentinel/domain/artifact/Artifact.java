@@ -43,14 +43,11 @@ public class Artifact {
     private ArtifactType type;
 
     @Builder
-    public Artifact(String sapArtifactId, String name, String version, ArtifactType type) {
+    public Artifact(IntegrationPackage integrationPackage, String sapArtifactId, String name, String version, ArtifactType type) {
+        this.integrationPackage = integrationPackage;
         this.sapArtifactId = sapArtifactId;
         this.name = name;
         this.version = version;
         this.type = type;
-    }
-
-    public void assignIntegrationPackage(IntegrationPackage integrationPackage) {
-        this.integrationPackage = integrationPackage;
     }
 }

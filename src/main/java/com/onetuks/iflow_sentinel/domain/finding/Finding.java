@@ -47,15 +47,12 @@ public class Finding {
     private String message;
 
     @Builder
-    public Finding(Artifact artifact, Rule rule, Severity severity, String location, String message) {
+    public Finding(CheckRun checkRun, Artifact artifact, Rule rule, Severity severity, String location, String message) {
+        this.checkRun = checkRun;
         this.artifact = artifact;
         this.rule = rule;
         this.severity = severity;
         this.location = location;
         this.message = message;
-    }
-
-    public void assignCheckRun(CheckRun checkRun) {
-        this.checkRun = checkRun;
     }
 }
