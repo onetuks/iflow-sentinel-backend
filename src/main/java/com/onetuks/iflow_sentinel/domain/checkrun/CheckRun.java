@@ -1,7 +1,6 @@
 package com.onetuks.iflow_sentinel.domain.checkrun;
 
 import com.onetuks.iflow_sentinel.domain.project.Project;
-import com.onetuks.iflow_sentinel.domain.ruleset.Ruleset;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -24,7 +23,7 @@ import org.hibernate.type.SqlTypes;
 /**
  * CheckRun 엔티티 클래스
  * 
- * 특정 프로젝트에 대해 특정 룰셋을 기반으로 실행된 검사(Check)의 이력을 기록합니다.
+ * 특정 프로젝트에 대해 실행된 검사(Check)의 이력을 기록합니다.
  * 검사의 시작 시간, 상태, 요약 결과 등을 저장합니다.
  */
 @Entity
@@ -47,13 +46,6 @@ public class CheckRun {
     private Project project;
 
     /**
-     * 검사에 사용된 룰셋
-     */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "ruleset_id", nullable = false)
-    private Ruleset ruleset;
-
-    /**
      * 검사 시작 일시
      */
     @Column
@@ -72,9 +64,8 @@ public class CheckRun {
     private Map<String, Object> summary;
 
     @Builder
-    public CheckRun(Project project, Ruleset ruleset, LocalDateTime startedAt, CheckRunStatus status) {
+    public CheckRun(Project project, LocalDateTime startedAt, CheckRunStatus status) {
         this.project = project;
-        this.ruleset = ruleset;
         this.startedAt = startedAt;
         this.status = status;
     }
