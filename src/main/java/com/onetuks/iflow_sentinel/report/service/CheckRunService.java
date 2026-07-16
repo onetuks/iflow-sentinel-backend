@@ -7,6 +7,8 @@ import com.onetuks.iflow_sentinel.report.dto.CheckRunUpdateRequest;
 import com.onetuks.iflow_sentinel.report.persistence.CheckRunJpaRepository;
 import com.onetuks.iflow_sentinel.connector.persistence.ProjectJpaRepository;
 import java.util.NoSuchElementException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +44,11 @@ public class CheckRunService {
     @Transactional(readOnly = true)
     public CheckRun getCheckRunById(Long id) {
         return checkRunRepository.findById(id).orElseThrow(NoSuchElementException::new);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<CheckRun> getCheckRuns(Pageable pageable) {
+        return checkRunRepository.findAll(pageable);
     }
 
     @Transactional

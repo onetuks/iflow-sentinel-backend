@@ -11,6 +11,8 @@ import com.onetuks.iflow_sentinel.report.persistence.CheckRunJpaRepository;
 import com.onetuks.iflow_sentinel.connector.persistence.ArtifactJpaRepository;
 import com.onetuks.iflow_sentinel.rule.persistence.RuleJpaRepository;
 import java.util.NoSuchElementException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,6 +57,11 @@ public class FindingService {
     @Transactional(readOnly = true)
     public Finding getFindingById(Long id) {
         return findingRepository.findById(id).orElseThrow(NoSuchElementException::new);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Finding> getFindings(Pageable pageable) {
+        return findingRepository.findAll(pageable);
     }
 
     @Transactional

@@ -6,6 +6,8 @@ import com.onetuks.iflow_sentinel.connector.dto.ProjectUpdateRequest;
 import com.onetuks.iflow_sentinel.connector.persistence.ProjectJpaRepository;
 import java.util.NoSuchElementException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +40,11 @@ public class ProjectService {
   @Transactional(readOnly = true)
   public Project getProjectByName(String name) {
     return projectRepository.findByName(name).orElseThrow(NoSuchElementException::new);
+  }
+
+  @Transactional(readOnly = true)
+  public Page<Project> getProjects(Pageable pageable) {
+    return projectRepository.findAll(pageable);
   }
 
   @Transactional

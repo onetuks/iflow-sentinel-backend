@@ -7,6 +7,8 @@ import com.onetuks.iflow_sentinel.connector.dto.TenantUpdateRequest;
 import com.onetuks.iflow_sentinel.connector.persistence.TenantJpaRepository;
 import com.onetuks.iflow_sentinel.connector.persistence.ProjectJpaRepository;
 import java.util.NoSuchElementException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,6 +48,11 @@ public class TenantService {
     @Transactional(readOnly = true)
     public Tenant getTenantById(Long id) {
         return tenantRepository.findById(id).orElseThrow(NoSuchElementException::new);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Tenant> getTenants(Pageable pageable) {
+        return tenantRepository.findAll(pageable);
     }
 
     @Transactional

@@ -7,6 +7,8 @@ import com.onetuks.iflow_sentinel.rule.dto.RuleUpdateRequest;
 import com.onetuks.iflow_sentinel.rule.persistence.RuleJpaRepository;
 import com.onetuks.iflow_sentinel.connector.persistence.ProjectJpaRepository;
 import java.util.NoSuchElementException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,6 +53,11 @@ public class RuleService {
     @Transactional(readOnly = true)
     public Rule getRuleById(Long id) {
         return ruleRepository.findById(id).orElseThrow(NoSuchElementException::new);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Rule> getRules(Pageable pageable) {
+        return ruleRepository.findAll(pageable);
     }
 
     @Transactional

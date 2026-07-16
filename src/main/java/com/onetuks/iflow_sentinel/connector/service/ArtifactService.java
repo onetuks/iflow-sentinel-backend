@@ -7,6 +7,8 @@ import com.onetuks.iflow_sentinel.connector.dto.ArtifactUpdateRequest;
 import com.onetuks.iflow_sentinel.connector.persistence.ArtifactJpaRepository;
 import com.onetuks.iflow_sentinel.connector.persistence.IntegrationPackageJpaRepository;
 import java.util.NoSuchElementException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +46,11 @@ public class ArtifactService {
     @Transactional(readOnly = true)
     public Artifact getArtifactById(Long id) {
         return artifactRepository.findById(id).orElseThrow(NoSuchElementException::new);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Artifact> getArtifacts(Pageable pageable) {
+        return artifactRepository.findAll(pageable);
     }
 
     @Transactional
