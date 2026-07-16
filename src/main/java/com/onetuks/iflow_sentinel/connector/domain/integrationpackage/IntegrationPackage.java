@@ -1,6 +1,6 @@
 package com.onetuks.iflow_sentinel.connector.domain.integrationpackage;
 
-import com.onetuks.iflow_sentinel.domain.tenant.Tenant;
+import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;

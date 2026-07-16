@@ -1,6 +1,6 @@
 package com.onetuks.iflow_sentinel.connector.dto;
 
-import com.onetuks.iflow_sentinel.domain.tenant.Tenant;
+import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
 import org.springframework.data.domain.Page;
 
 public record TenantResponse(

@@ -1,7 +1,7 @@
 package com.onetuks.iflow_sentinel.connector.service;
 
 import com.onetuks.iflow_sentinel.connector.domain.integrationpackage.IntegrationPackage;
-import com.onetuks.iflow_sentinel.domain.tenant.Tenant;
+import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
 import com.onetuks.iflow_sentinel.connector.dto.IntegrationPackageCreateRequest;
 import com.onetuks.iflow_sentinel.connector.dto.IntegrationPackageUpdateRequest;
 import com.onetuks.iflow_sentinel.connector.persistence.IntegrationPackageJpaRepository;

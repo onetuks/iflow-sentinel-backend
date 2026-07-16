@@ -1,15 +1,15 @@
 package com.onetuks.iflow_sentinel.connector.service;
 
-import com.onetuks.iflow_sentinel.domain.tenant.Tenant;
 import com.onetuks.iflow_sentinel.connector.domain.project.Project;
+import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
 import com.onetuks.iflow_sentinel.connector.dto.TenantCreateRequest;
 import com.onetuks.iflow_sentinel.connector.dto.TenantUpdateRequest;
-import com.onetuks.iflow_sentinel.connector.persistence.TenantJpaRepository;
 import com.onetuks.iflow_sentinel.connector.persistence.ProjectJpaRepository;
+import com.onetuks.iflow_sentinel.connector.persistence.TenantJpaRepository;
 import java.util.NoSuchElementException;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

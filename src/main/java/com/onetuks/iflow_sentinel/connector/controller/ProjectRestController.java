@@ -8,7 +8,6 @@ import com.onetuks.iflow_sentinel.connector.dto.ProjectUpdateRequest;
 import com.onetuks.iflow_sentinel.connector.service.ProjectService;
 import jakarta.validation.Valid;
 import java.net.URI;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

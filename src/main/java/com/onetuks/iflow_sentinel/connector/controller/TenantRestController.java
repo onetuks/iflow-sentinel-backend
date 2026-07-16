@@ -1,6 +1,6 @@
 package com.onetuks.iflow_sentinel.connector.controller;
 
-import com.onetuks.iflow_sentinel.domain.tenant.Tenant;
+import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
 import com.onetuks.iflow_sentinel.connector.dto.TenantCreateRequest;
 import com.onetuks.iflow_sentinel.connector.dto.TenantResponse;
 import com.onetuks.iflow_sentinel.connector.dto.TenantResponse.TenantResponses;

@@ -1,4 +1,4 @@
-package com.onetuks.iflow_sentinel.domain.tenant;
+package com.onetuks.iflow_sentinel.connector.domain.tenant;
 
 import com.onetuks.iflow_sentinel.connector.domain.project.Project;
 
