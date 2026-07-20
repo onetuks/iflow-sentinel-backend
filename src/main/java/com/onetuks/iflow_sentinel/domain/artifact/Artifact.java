@@ -50,4 +50,10 @@ public class Artifact {
         this.version = version;
         this.type = type;
     }
+
+    public void updateFrom(String name, String version, ArtifactType type) {
+        this.name = name;
+        this.version = version;
+        this.type = type;
+    }
 }

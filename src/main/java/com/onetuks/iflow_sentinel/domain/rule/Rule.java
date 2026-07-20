@@ -75,4 +75,12 @@ public class Rule {
     public void assignRuleset(Ruleset ruleset) {
         this.ruleset = ruleset;
     }
+
+    public void updateDefinition(Severity severity, Map<String, Object> target, Map<String, Object> params, String message, boolean enabled) {
+        this.severity = severity;
+        this.target = target;
+        this.params = params;
+        this.message = message;
+        this.enabled = enabled;
+    }
 }

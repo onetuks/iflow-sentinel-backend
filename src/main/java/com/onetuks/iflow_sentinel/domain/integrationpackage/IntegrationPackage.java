@@ -39,4 +39,8 @@ public class IntegrationPackage {
         this.sapPackageId = sapPackageId;
         this.name = name;
     }
+
+    public void rename(String name) {
+        this.name = name;
+    }
 }

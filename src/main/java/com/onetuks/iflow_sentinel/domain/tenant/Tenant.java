@@ -36,6 +36,9 @@ public class Tenant {
     @Column(nullable = false)
     private String odataUrl;
 
+    @Column(nullable = false)
+    private String tokenUrl;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private TenantPlatform platformType;
@@ -56,6 +59,7 @@ public class Tenant {
             Project project,
             String name,
             String odataUrl,
+            String tokenUrl,
             TenantPlatform platformType,
             TenantAuthType authType,
             String clientId,
@@ -63,6 +67,7 @@ public class Tenant {
         this.project = project;
         this.name = name;
         this.odataUrl = odataUrl;
+        this.tokenUrl = tokenUrl;
         this.platformType = platformType;
         this.authType = authType;
         this.clientId = clientId;
