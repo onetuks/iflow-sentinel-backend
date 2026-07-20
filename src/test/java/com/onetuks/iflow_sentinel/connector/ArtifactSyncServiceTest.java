@@ -1,11 +1,14 @@
 package com.onetuks.iflow_sentinel.connector;
 
+import com.onetuks.iflow_sentinel.connector.component.SapODataClient;
+import com.onetuks.iflow_sentinel.connector.domain.artifact.Artifact;
+import com.onetuks.iflow_sentinel.connector.domain.artifact.ArtifactRepository;
+import com.onetuks.iflow_sentinel.connector.domain.artifact.ArtifactType;
+import com.onetuks.iflow_sentinel.connector.domain.integrationpackage.IntegrationPackage;
+import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
 import com.onetuks.iflow_sentinel.connector.dto.SapArtifactDto;
-import com.onetuks.iflow_sentinel.domain.artifact.Artifact;
-import com.onetuks.iflow_sentinel.domain.artifact.ArtifactRepository;
-import com.onetuks.iflow_sentinel.domain.artifact.ArtifactType;
-import com.onetuks.iflow_sentinel.domain.integrationpackage.IntegrationPackage;
-import com.onetuks.iflow_sentinel.domain.tenant.Tenant;
+import com.onetuks.iflow_sentinel.connector.service.ArtifactSyncService;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -28,12 +31,15 @@ class ArtifactSyncServiceTest {
     @Mock
     private ArtifactRepository artifactRepository;
 
-    private final Tenant tenant = TenantTestFixtures.tenant(1L, "https://tenant.example.com/api/v1", "https://tenant.example.com/oauth/token");
-    private final IntegrationPackage integrationPackage = IntegrationPackage.builder().tenant(tenant).sapPackageId("PKG1").name("Package One").build();
+    private final Tenant tenant = TenantTestFixtures.tenant(1L, "https://tenant.example.com/api/v1",
+            "https://tenant.example.com/oauth/token");
+    private final IntegrationPackage integrationPackage = IntegrationPackage.builder().tenant(tenant)
+            .sapPackageId("PKG1").name("Package One").build();
 
     @Test
     void createsNewArtifactAsIflowType() {
-        when(odataClient.getCollection(eq(tenant), eq("/IntegrationPackages('PKG1')/IntegrationDesigntimeArtifacts"), any()))
+        when(odataClient.getCollection(eq(tenant), eq("/IntegrationPackages('PKG1')/IntegrationDesigntimeArtifacts"),
+                any()))
                 .thenReturn(List.of(new SapArtifactDto("ART1", "My Flow", "1.0.0", "PKG1")));
         when(artifactRepository.findBySapArtifactId("ART1")).thenReturn(Optional.empty());
         when(artifactRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));

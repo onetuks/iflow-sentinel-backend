@@ -1,6 +1,9 @@
 package com.onetuks.iflow_sentinel.connector;
 
-import com.onetuks.iflow_sentinel.domain.tenant.Tenant;
+import com.onetuks.iflow_sentinel.connector.component.OAuth2TokenProvider;
+import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
+import com.onetuks.iflow_sentinel.exception.ConnectorException;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
@@ -44,7 +47,8 @@ class OAuth2TokenProviderTest {
         mockServer.expect(requestTo(TOKEN_URL))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header(HttpHeaders.AUTHORIZATION, BASIC_AUTH_HEADER))
-                .andRespond(withSuccess("{\"access_token\":\"tok-123\",\"expires_in\":3600,\"token_type\":\"bearer\"}", MediaType.APPLICATION_JSON));
+                .andRespond(withSuccess("{\"access_token\":\"tok-123\",\"expires_in\":3600,\"token_type\":\"bearer\"}",
+                        MediaType.APPLICATION_JSON));
 
         OAuth2TokenProvider.CachedToken token = tokenProvider.fetchToken(tenant);
 
@@ -56,7 +60,8 @@ class OAuth2TokenProviderTest {
     void getAccessTokenCachesAndDoesNotRefetchWithinExpiry() {
         mockServer.expect(requestTo(TOKEN_URL))
                 .andExpect(method(HttpMethod.POST))
-                .andRespond(withSuccess("{\"access_token\":\"tok-123\",\"expires_in\":3600,\"token_type\":\"bearer\"}", MediaType.APPLICATION_JSON));
+                .andRespond(withSuccess("{\"access_token\":\"tok-123\",\"expires_in\":3600,\"token_type\":\"bearer\"}",
+                        MediaType.APPLICATION_JSON));
 
         String first = tokenProvider.getAccessToken(tenant);
         String second = tokenProvider.getAccessToken(tenant);

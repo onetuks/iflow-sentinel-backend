@@ -1,6 +1,6 @@
 package com.onetuks.iflow_sentinel.ruleengine.evaluator;
 
-import com.onetuks.iflow_sentinel.domain.artifact.Artifact;
+import com.onetuks.iflow_sentinel.connector.domain.artifact.Artifact;
 import com.onetuks.iflow_sentinel.domain.rule.Rule;
 import com.onetuks.iflow_sentinel.domain.rule.RuleType;
 import com.onetuks.iflow_sentinel.domain.rule.Severity;
@@ -15,7 +15,10 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 실제 픽스처의 sender 참여자(Sender, Smartshift, Sender1)는 모두 OP_/B2B_/CP_ 접두어를 따르지 않는다. */
+/**
+ * 실제 픽스처의 sender 참여자(Sender, Smartshift, Sender1)는 모두 OP_/B2B_/CP_ 접두어를 따르지
+ * 않는다.
+ */
 class NamingConventionEvaluatorTest {
 
     private final NamingConventionEvaluator evaluator = new NamingConventionEvaluator();
@@ -28,11 +31,11 @@ class NamingConventionEvaluatorTest {
                 RuleType.NAMING_CONVENTION,
                 Map.of("element", "participant", "role", "sender"),
                 Map.of("prefix", List.of("OP_", "B2B_", "CP_")),
-                "송신 시스템 이름은 접두어를 따라야 합니다."
-        );
+                "송신 시스템 이름은 접두어를 따라야 합니다.");
         EffectiveRule effectiveRule = new EffectiveRule(rule, Severity.FAIL, true);
 
-        List<FindingResult> findings = evaluator.evaluate(effectiveRule, List.of(new ArtifactParsedModel(artifact, parsedModel)));
+        List<FindingResult> findings = evaluator.evaluate(effectiveRule,
+                List.of(new ArtifactParsedModel(artifact, parsedModel)));
 
         assertThat(findings).hasSize(3);
         assertThat(findings).allMatch(f -> f.artifact() == artifact && f.severity() == Severity.FAIL);
@@ -44,11 +47,11 @@ class NamingConventionEvaluatorTest {
                 RuleType.NAMING_CONVENTION,
                 Map.of("element", "participant", "role", "sender"),
                 Map.of("prefix", List.of("Sender", "Smartshift")),
-                "무시"
-        );
+                "무시");
         EffectiveRule effectiveRule = new EffectiveRule(rule, Severity.FAIL, true);
 
-        List<FindingResult> findings = evaluator.evaluate(effectiveRule, List.of(new ArtifactParsedModel(artifact, parsedModel)));
+        List<FindingResult> findings = evaluator.evaluate(effectiveRule,
+                List.of(new ArtifactParsedModel(artifact, parsedModel)));
 
         assertThat(findings).isEmpty();
     }

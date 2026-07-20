@@ -1,7 +1,10 @@
 package com.onetuks.iflow_sentinel.connector;
 
+import com.onetuks.iflow_sentinel.connector.component.OAuth2TokenProvider;
+import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
 import com.onetuks.iflow_sentinel.connector.dto.ConnectionTestResult;
-import com.onetuks.iflow_sentinel.domain.tenant.Tenant;
+import com.onetuks.iflow_sentinel.connector.service.TenantConnectionService;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;

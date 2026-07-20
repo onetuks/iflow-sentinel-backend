@@ -1,6 +1,6 @@
 package com.onetuks.iflow_sentinel.web;
 
-import com.onetuks.iflow_sentinel.connector.ConnectorException;
+import com.onetuks.iflow_sentinel.exception.ConnectorException;
 import com.onetuks.iflow_sentinel.parser.ParserException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

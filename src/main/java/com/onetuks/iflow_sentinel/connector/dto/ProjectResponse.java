@@ -1,6 +1,6 @@
 package com.onetuks.iflow_sentinel.connector.dto;
 
-import com.onetuks.iflow_sentinel.domain.project.Project;
+import com.onetuks.iflow_sentinel.connector.domain.project.Project;
 
 public record ProjectResponse(Long id, String name) {
 

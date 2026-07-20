@@ -1,6 +1,6 @@
 package com.onetuks.iflow_sentinel.domain.binding;
 
-import com.onetuks.iflow_sentinel.domain.project.Project;
+import com.onetuks.iflow_sentinel.connector.domain.project.Project;
 import com.onetuks.iflow_sentinel.domain.ruleset.Ruleset;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;

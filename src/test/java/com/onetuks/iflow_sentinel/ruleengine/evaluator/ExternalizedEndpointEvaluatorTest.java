@@ -1,6 +1,6 @@
 package com.onetuks.iflow_sentinel.ruleengine.evaluator;
 
-import com.onetuks.iflow_sentinel.domain.artifact.Artifact;
+import com.onetuks.iflow_sentinel.connector.domain.artifact.Artifact;
 import com.onetuks.iflow_sentinel.domain.rule.Rule;
 import com.onetuks.iflow_sentinel.domain.rule.RuleType;
 import com.onetuks.iflow_sentinel.domain.rule.Severity;
@@ -28,7 +28,8 @@ class ExternalizedEndpointEvaluatorTest {
                 RuleType.EXTERNALIZED_ENDPOINT, Map.of("direction", "Receiver"), Map.of(), "수신 주소는 외부화되어야 합니다.");
         EffectiveRule effectiveRule = new EffectiveRule(rule, Severity.FAIL, true);
 
-        List<FindingResult> findings = evaluator.evaluate(effectiveRule, List.of(new ArtifactParsedModel(artifact, parsedModel)));
+        List<FindingResult> findings = evaluator.evaluate(effectiveRule,
+                List.of(new ArtifactParsedModel(artifact, parsedModel)));
 
         assertThat(findings).isEmpty();
     }

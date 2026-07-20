@@ -1,6 +1,6 @@
 package com.onetuks.iflow_sentinel.ruleengine.evaluator;
 
-import com.onetuks.iflow_sentinel.domain.artifact.Artifact;
+import com.onetuks.iflow_sentinel.connector.domain.artifact.Artifact;
 import com.onetuks.iflow_sentinel.domain.rule.Rule;
 import com.onetuks.iflow_sentinel.domain.rule.RuleType;
 import com.onetuks.iflow_sentinel.domain.rule.Severity;
@@ -25,10 +25,12 @@ class ForbiddenConfigurationEvaluatorTest {
     @Test
     void matchingKeyValueFlagsEveryMatchingStep() {
         Rule rule = RuleEngineTestSupport.rule(
-                RuleType.FORBIDDEN_CONFIGURATION, Map.of("element", "step"), Map.of("key", "operation", "value", "put"), "put 연산은 금지됩니다.");
+                RuleType.FORBIDDEN_CONFIGURATION, Map.of("element", "step"), Map.of("key", "operation", "value", "put"),
+                "put 연산은 금지됩니다.");
         EffectiveRule effectiveRule = new EffectiveRule(rule, Severity.WARN, true);
 
-        List<FindingResult> findings = evaluator.evaluate(effectiveRule, List.of(new ArtifactParsedModel(artifact, parsedModel)));
+        List<FindingResult> findings = evaluator.evaluate(effectiveRule,
+                List.of(new ArtifactParsedModel(artifact, parsedModel)));
 
         assertThat(findings).hasSize(3);
     }
@@ -36,9 +38,11 @@ class ForbiddenConfigurationEvaluatorTest {
     @Test
     void nonMatchingKeyProducesNoFindings() {
         Rule rule = RuleEngineTestSupport.rule(
-                RuleType.FORBIDDEN_CONFIGURATION, Map.of("element", "step"), Map.of("key", "nonexistentKey", "value", "x"), "무시");
+                RuleType.FORBIDDEN_CONFIGURATION, Map.of("element", "step"),
+                Map.of("key", "nonexistentKey", "value", "x"), "무시");
         EffectiveRule effectiveRule = new EffectiveRule(rule, Severity.WARN, true);
 
-        assertThat(evaluator.evaluate(effectiveRule, List.of(new ArtifactParsedModel(artifact, parsedModel)))).isEmpty();
+        assertThat(evaluator.evaluate(effectiveRule, List.of(new ArtifactParsedModel(artifact, parsedModel))))
+                .isEmpty();
     }
 }

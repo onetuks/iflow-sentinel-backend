@@ -1,6 +1,6 @@
 package com.onetuks.iflow_sentinel.domain.finding;
 
-import com.onetuks.iflow_sentinel.domain.artifact.Artifact;
+import com.onetuks.iflow_sentinel.connector.domain.artifact.Artifact;
 import com.onetuks.iflow_sentinel.domain.checkrun.CheckRun;
 import com.onetuks.iflow_sentinel.domain.rule.Rule;
 import com.onetuks.iflow_sentinel.domain.rule.Severity;
@@ -47,7 +47,8 @@ public class Finding {
     private String message;
 
     @Builder
-    public Finding(CheckRun checkRun, Artifact artifact, Rule rule, Severity severity, String location, String message) {
+    public Finding(CheckRun checkRun, Artifact artifact, Rule rule, Severity severity, String location,
+            String message) {
         this.checkRun = checkRun;
         this.artifact = artifact;
         this.rule = rule;

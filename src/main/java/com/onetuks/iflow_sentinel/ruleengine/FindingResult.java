@@ -1,6 +1,6 @@
 package com.onetuks.iflow_sentinel.ruleengine;
 
-import com.onetuks.iflow_sentinel.domain.artifact.Artifact;
+import com.onetuks.iflow_sentinel.connector.domain.artifact.Artifact;
 import com.onetuks.iflow_sentinel.domain.rule.Rule;
 import com.onetuks.iflow_sentinel.domain.rule.Severity;
 

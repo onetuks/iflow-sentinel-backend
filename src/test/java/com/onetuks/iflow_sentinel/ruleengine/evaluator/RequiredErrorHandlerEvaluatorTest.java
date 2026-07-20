@@ -1,6 +1,6 @@
 package com.onetuks.iflow_sentinel.ruleengine.evaluator;
 
-import com.onetuks.iflow_sentinel.domain.artifact.Artifact;
+import com.onetuks.iflow_sentinel.connector.domain.artifact.Artifact;
 import com.onetuks.iflow_sentinel.domain.rule.Rule;
 import com.onetuks.iflow_sentinel.domain.rule.RuleType;
 import com.onetuks.iflow_sentinel.domain.rule.Severity;
@@ -24,10 +24,12 @@ class RequiredErrorHandlerEvaluatorTest {
 
     @Test
     void emptyExceptionSubprocessesProducesOneFinding() {
-        Rule rule = RuleEngineTestSupport.rule(RuleType.REQUIRED_ERROR_HANDLER, Map.of(), Map.of(), "예외 처리 서브프로세스가 필요합니다.");
+        Rule rule = RuleEngineTestSupport.rule(RuleType.REQUIRED_ERROR_HANDLER, Map.of(), Map.of(),
+                "예외 처리 서브프로세스가 필요합니다.");
         EffectiveRule effectiveRule = new EffectiveRule(rule, Severity.FAIL, true);
 
-        List<FindingResult> findings = evaluator.evaluate(effectiveRule, List.of(new ArtifactParsedModel(artifact, parsedModel)));
+        List<FindingResult> findings = evaluator.evaluate(effectiveRule,
+                List.of(new ArtifactParsedModel(artifact, parsedModel)));
 
         assertThat(findings).hasSize(1);
         assertThat(findings.get(0).location()).isEqualTo("iflow");

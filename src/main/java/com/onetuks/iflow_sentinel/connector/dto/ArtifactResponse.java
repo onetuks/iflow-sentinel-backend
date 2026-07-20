@@ -1,9 +1,10 @@
 package com.onetuks.iflow_sentinel.connector.dto;
 
-import com.onetuks.iflow_sentinel.domain.artifact.Artifact;
-import com.onetuks.iflow_sentinel.domain.artifact.ArtifactType;
+import com.onetuks.iflow_sentinel.connector.domain.artifact.Artifact;
+import com.onetuks.iflow_sentinel.connector.domain.artifact.ArtifactType;
 
-public record ArtifactResponse(Long id, Long integrationPackageId, String sapArtifactId, String name, String version, ArtifactType type) {
+public record ArtifactResponse(Long id, Long integrationPackageId, String sapArtifactId, String name, String version,
+        ArtifactType type) {
 
     public static ArtifactResponse from(Artifact artifact) {
         return new ArtifactResponse(
@@ -12,7 +13,6 @@ public record ArtifactResponse(Long id, Long integrationPackageId, String sapArt
                 artifact.getSapArtifactId(),
                 artifact.getName(),
                 artifact.getVersion(),
-                artifact.getType()
-        );
+                artifact.getType());
     }
 }

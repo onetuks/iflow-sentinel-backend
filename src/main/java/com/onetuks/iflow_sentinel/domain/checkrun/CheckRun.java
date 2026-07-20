@@ -1,6 +1,6 @@
 package com.onetuks.iflow_sentinel.domain.checkrun;
 
-import com.onetuks.iflow_sentinel.domain.project.Project;
+import com.onetuks.iflow_sentinel.connector.domain.project.Project;
 import com.onetuks.iflow_sentinel.domain.ruleset.Ruleset;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

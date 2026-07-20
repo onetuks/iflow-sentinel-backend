@@ -1,9 +1,12 @@
 package com.onetuks.iflow_sentinel.connector;
 
+import com.onetuks.iflow_sentinel.connector.component.SapODataClient;
+import com.onetuks.iflow_sentinel.connector.domain.integrationpackage.IntegrationPackage;
+import com.onetuks.iflow_sentinel.connector.domain.integrationpackage.IntegrationPackageRepository;
+import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
 import com.onetuks.iflow_sentinel.connector.dto.SapPackageDto;
-import com.onetuks.iflow_sentinel.domain.integrationpackage.IntegrationPackage;
-import com.onetuks.iflow_sentinel.domain.integrationpackage.IntegrationPackageRepository;
-import com.onetuks.iflow_sentinel.domain.tenant.Tenant;
+import com.onetuks.iflow_sentinel.connector.service.PackageSyncService;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -27,7 +30,8 @@ class PackageSyncServiceTest {
     @Mock
     private IntegrationPackageRepository packageRepository;
 
-    private final Tenant tenant = TenantTestFixtures.tenant(1L, "https://tenant.example.com/api/v1", "https://tenant.example.com/oauth/token");
+    private final Tenant tenant = TenantTestFixtures.tenant(1L, "https://tenant.example.com/api/v1",
+            "https://tenant.example.com/oauth/token");
 
     @Test
     void createsNewPackageWhenNotExisting() {
@@ -46,7 +50,8 @@ class PackageSyncServiceTest {
 
     @Test
     void renamesExistingPackageOnResync() {
-        IntegrationPackage existing = IntegrationPackage.builder().tenant(tenant).sapPackageId("PKG1").name("Old Name").build();
+        IntegrationPackage existing = IntegrationPackage.builder().tenant(tenant).sapPackageId("PKG1").name("Old Name")
+                .build();
         when(odataClient.getCollection(eq(tenant), eq("/IntegrationPackages"), any()))
                 .thenReturn(List.of(new SapPackageDto("PKG1", "New Name")));
         when(packageRepository.findBySapPackageId("PKG1")).thenReturn(Optional.of(existing));

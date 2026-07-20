@@ -1,29 +1,30 @@
 package com.onetuks.iflow_sentinel.checkrun;
 
 import com.onetuks.iflow_sentinel.checkrun.dto.CheckRunResponse;
-import com.onetuks.iflow_sentinel.connector.ArtifactDownloadService;
-import com.onetuks.iflow_sentinel.connector.ConnectorException;
-import com.onetuks.iflow_sentinel.domain.artifact.Artifact;
-import com.onetuks.iflow_sentinel.domain.artifact.ArtifactRepository;
-import com.onetuks.iflow_sentinel.domain.artifact.ArtifactType;
+import com.onetuks.iflow_sentinel.connector.domain.artifact.Artifact;
+import com.onetuks.iflow_sentinel.connector.domain.artifact.ArtifactRepository;
+import com.onetuks.iflow_sentinel.connector.domain.artifact.ArtifactType;
+import com.onetuks.iflow_sentinel.connector.domain.integrationpackage.IntegrationPackage;
+import com.onetuks.iflow_sentinel.connector.domain.integrationpackage.IntegrationPackageRepository;
+import com.onetuks.iflow_sentinel.connector.domain.project.Project;
+import com.onetuks.iflow_sentinel.connector.domain.project.ProjectRepository;
+import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
+import com.onetuks.iflow_sentinel.connector.domain.tenant.TenantAuthType;
+import com.onetuks.iflow_sentinel.connector.domain.tenant.TenantPlatform;
+import com.onetuks.iflow_sentinel.connector.domain.tenant.TenantRepository;
+import com.onetuks.iflow_sentinel.connector.service.ArtifactDownloadService;
 import com.onetuks.iflow_sentinel.domain.binding.Binding;
 import com.onetuks.iflow_sentinel.domain.binding.BindingRepository;
 import com.onetuks.iflow_sentinel.domain.checkrun.CheckRunRepository;
 import com.onetuks.iflow_sentinel.domain.checkrun.CheckRunStatus;
 import com.onetuks.iflow_sentinel.domain.finding.FindingRepository;
-import com.onetuks.iflow_sentinel.domain.integrationpackage.IntegrationPackage;
-import com.onetuks.iflow_sentinel.domain.integrationpackage.IntegrationPackageRepository;
-import com.onetuks.iflow_sentinel.domain.project.Project;
-import com.onetuks.iflow_sentinel.domain.project.ProjectRepository;
 import com.onetuks.iflow_sentinel.domain.rule.Rule;
 import com.onetuks.iflow_sentinel.domain.rule.RuleType;
 import com.onetuks.iflow_sentinel.domain.rule.Severity;
 import com.onetuks.iflow_sentinel.domain.ruleset.Ruleset;
 import com.onetuks.iflow_sentinel.domain.ruleset.RulesetRepository;
-import com.onetuks.iflow_sentinel.domain.tenant.Tenant;
-import com.onetuks.iflow_sentinel.domain.tenant.TenantAuthType;
-import com.onetuks.iflow_sentinel.domain.tenant.TenantPlatform;
-import com.onetuks.iflow_sentinel.domain.tenant.TenantRepository;
+import com.onetuks.iflow_sentinel.exception.ConnectorException;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -109,7 +110,8 @@ class CheckRunServiceIntegrationTest {
                 .type(ArtifactType.IFLOW)
                 .build());
 
-        Ruleset ruleset = Ruleset.builder().rulesetKey("rs-" + unique).version("1.0").description("test ruleset").build();
+        Ruleset ruleset = Ruleset.builder().rulesetKey("rs-" + unique).version("1.0").description("test ruleset")
+                .build();
         Rule rule = Rule.builder()
                 .ruleKey("required-error-handler-" + unique)
                 .type(RuleType.REQUIRED_ERROR_HANDLER)
@@ -136,7 +138,8 @@ class CheckRunServiceIntegrationTest {
         assertThat(response.findings()).hasSize(1);
         assertThat(response.findings().get(0).severity()).isEqualTo(Severity.FAIL);
 
-        assertThat(checkRunRepository.findById(response.id()).orElseThrow().getStatus()).isEqualTo(CheckRunStatus.COMPLETED);
+        assertThat(checkRunRepository.findById(response.id()).orElseThrow().getStatus())
+                .isEqualTo(CheckRunStatus.COMPLETED);
         assertThat(findingRepository.findByCheckRunId(response.id())).hasSize(1);
     }
 
@@ -153,7 +156,8 @@ class CheckRunServiceIntegrationTest {
     }
 
     private static byte[] sampleZipBytes() {
-        try (InputStream in = CheckRunServiceIntegrationTest.class.getResourceAsStream("/parser/GMES_GQMS_EA_PQCRESULT_01.zip")) {
+        try (InputStream in = CheckRunServiceIntegrationTest.class
+                .getResourceAsStream("/parser/GMES_GQMS_EA_PQCRESULT_01.zip")) {
             if (in == null) {
                 throw new IllegalStateException("테스트 픽스처를 찾을 수 없습니다: /parser/GMES_GQMS_EA_PQCRESULT_01.zip");
             }
