@@ -1,4 +1,4 @@
-package com.onetuks.iflow_sentinel.rule.domain.rule;
+package com.onetuks.iflow_sentinel.rule.domain;
 
 import java.util.List;
 

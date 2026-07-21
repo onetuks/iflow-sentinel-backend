@@ -2,7 +2,8 @@ package com.onetuks.iflow_sentinel.report.controller;
 
 import com.onetuks.iflow_sentinel.report.dto.FindingResponse;
 import com.onetuks.iflow_sentinel.report.service.FindingService;
-import com.onetuks.iflow_sentinel.rule.domain.rule.Severity;
+import com.onetuks.iflow_sentinel.rule.domain.Severity;
+
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;

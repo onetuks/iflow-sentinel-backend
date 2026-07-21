@@ -2,7 +2,8 @@ package com.onetuks.iflow_sentinel.report.service;
 
 import com.onetuks.iflow_sentinel.report.domain.finding.FindingRepository;
 import com.onetuks.iflow_sentinel.report.dto.FindingResponse;
-import com.onetuks.iflow_sentinel.rule.domain.rule.Severity;
+import com.onetuks.iflow_sentinel.rule.domain.Severity;
+
 import org.springframework.stereotype.Service;
 
 import java.util.List;

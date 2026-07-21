@@ -1,8 +1,8 @@
 package com.onetuks.iflow_sentinel.rule.dto;
 
-import com.onetuks.iflow_sentinel.rule.domain.rule.Rule;
-
 import java.util.Map;
+
+import com.onetuks.iflow_sentinel.rule.domain.Rule;
 
 public record RuleResponse(
         Long id,

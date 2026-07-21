@@ -1,4 +1,4 @@
-package com.onetuks.iflow_sentinel.rule.domain.rule;
+package com.onetuks.iflow_sentinel.rule.domain;
 
 import com.onetuks.iflow_sentinel.connector.domain.project.Project;
 import jakarta.persistence.Column;
@@ -79,7 +79,8 @@ public class Rule {
         this.enabled = enabled;
     }
 
-    public void updateDefinition(Severity severity, Map<String, Object> target, Map<String, Object> params, String message, boolean enabled) {
+    public void updateDefinition(Severity severity, Map<String, Object> target, Map<String, Object> params,
+            String message, boolean enabled) {
         this.severity = severity;
         this.target = target;
         this.params = params;
