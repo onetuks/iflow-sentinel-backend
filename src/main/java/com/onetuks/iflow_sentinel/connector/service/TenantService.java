@@ -19,12 +19,14 @@ public class TenantService {
     private final TenantRepository tenantRepository;
     private final ProjectRepository projectRepository;
     private final TenantConnectionService connectionService;
+    private final PackageSyncService packageSyncService;
 
     public TenantService(TenantRepository tenantRepository, ProjectRepository projectRepository,
-            TenantConnectionService connectionService) {
+            TenantConnectionService connectionService, PackageSyncService packageSyncService) {
         this.tenantRepository = tenantRepository;
         this.projectRepository = projectRepository;
         this.connectionService = connectionService;
+        this.packageSyncService = packageSyncService;
     }
 
     public TenantResponse create(TenantRequest request) {
@@ -41,7 +43,9 @@ public class TenantService {
                 .clientId(request.clientId())
                 .clientSecret(request.clientSecret())
                 .build();
-        return TenantResponse.from(tenantRepository.save(tenant));
+        Tenant saved = tenantRepository.save(tenant);
+        packageSyncService.syncPackages(saved);
+        return TenantResponse.from(saved);
     }
 
     public List<TenantResponse> list(Long projectId) {

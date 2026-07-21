@@ -32,12 +32,16 @@ class TenantServiceTest {
     @Mock
     private TenantConnectionService connectionService;
 
+    @Mock
+    private com.onetuks.iflow_sentinel.connector.service.PackageSyncService packageSyncService;
+
     private final Tenant tenant = TenantTestFixtures.tenant(1L, "https://old.example.com/api/v1",
             "https://old.example.com/oauth/token");
 
     @Test
     void updateAppliesAllRequestedFieldsToTheEntity() {
-        TenantService service = new TenantService(tenantRepository, projectRepository, connectionService);
+        TenantService service = new TenantService(tenantRepository, projectRepository, connectionService,
+                packageSyncService);
         when(tenantRepository.findById(1L)).thenReturn(java.util.Optional.of(tenant));
         when(tenantRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -62,7 +66,8 @@ class TenantServiceTest {
 
     @Test
     void deleteDelegatesToRepository() {
-        TenantService service = new TenantService(tenantRepository, projectRepository, connectionService);
+        TenantService service = new TenantService(tenantRepository, projectRepository, connectionService,
+                packageSyncService);
 
         service.delete(1L);
 
