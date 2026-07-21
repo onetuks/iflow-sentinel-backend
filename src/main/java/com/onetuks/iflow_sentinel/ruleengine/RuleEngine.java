@@ -1,6 +1,6 @@
 package com.onetuks.iflow_sentinel.ruleengine;
 
-import com.onetuks.iflow_sentinel.domain.rule.RuleType;
+import com.onetuks.iflow_sentinel.rule.domain.rule.RuleType;
 import com.onetuks.iflow_sentinel.ruleengine.evaluator.RuleTypeEvaluator;
 import org.springframework.stereotype.Component;
 

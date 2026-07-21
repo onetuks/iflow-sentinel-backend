@@ -5,9 +5,11 @@ import com.onetuks.iflow_sentinel.connector.dto.TenantRequest;
 import com.onetuks.iflow_sentinel.connector.dto.TenantResponse;
 import com.onetuks.iflow_sentinel.connector.service.TenantService;
 
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -43,5 +45,15 @@ public class TenantController {
     @PostMapping("/{id}/test-connection")
     public ConnectionTestResult testConnection(@PathVariable Long id) {
         return tenantService.testConnection(id);
+    }
+
+    @PutMapping("/{id}")
+    public TenantResponse update(@PathVariable Long id, @RequestBody TenantRequest request) {
+        return tenantService.update(id, request);
+    }
+
+    @DeleteMapping("/{id}")
+    public void delete(@PathVariable Long id) {
+        tenantService.delete(id);
     }
 }

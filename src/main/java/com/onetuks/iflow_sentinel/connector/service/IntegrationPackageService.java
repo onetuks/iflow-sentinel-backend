@@ -33,4 +33,8 @@ public class IntegrationPackageService {
     public List<IntegrationPackageResponse> list(Long tenantId) {
         return packageRepository.findByTenantId(tenantId).stream().map(IntegrationPackageResponse::from).toList();
     }
+
+    public void delete(Long id) {
+        packageRepository.deleteById(id);
+    }
 }

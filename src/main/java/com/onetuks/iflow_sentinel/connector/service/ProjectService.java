@@ -8,6 +8,7 @@ import com.onetuks.iflow_sentinel.connector.dto.ProjectResponse;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.NoSuchElementException;
 
 @Service
 public class ProjectService {
@@ -25,5 +26,16 @@ public class ProjectService {
 
     public List<ProjectResponse> list() {
         return projectRepository.findAll().stream().map(ProjectResponse::from).toList();
+    }
+
+    public ProjectResponse update(Long id, ProjectRequest request) {
+        Project project = projectRepository.findById(id)
+                .orElseThrow(() -> new NoSuchElementException("프로젝트를 찾을 수 없습니다: " + id));
+        project.rename(request.name());
+        return ProjectResponse.from(projectRepository.save(project));
+    }
+
+    public void delete(Long id) {
+        projectRepository.deleteById(id);
     }
 }

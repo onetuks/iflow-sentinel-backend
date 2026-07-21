@@ -33,4 +33,8 @@ public class ArtifactService {
     public List<ArtifactResponse> list(Long packageId) {
         return artifactRepository.findByIntegrationPackageId(packageId).stream().map(ArtifactResponse::from).toList();
     }
+
+    public void delete(Long id) {
+        artifactRepository.deleteById(id);
+    }
 }

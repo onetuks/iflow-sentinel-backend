@@ -74,4 +74,21 @@ public class Tenant {
         this.clientId = clientId;
         this.clientSecret = clientSecret;
     }
+
+    public void update(
+            String name,
+            String odataUrl,
+            String tokenUrl,
+            TenantPlatform platformType,
+            TenantAuthType authType,
+            String clientId,
+            String clientSecret) {
+        this.name = name;
+        this.odataUrl = odataUrl;
+        this.tokenUrl = tokenUrl;
+        this.platformType = platformType;
+        this.authType = authType;
+        this.clientId = clientId;
+        this.clientSecret = clientSecret;
+    }
 }

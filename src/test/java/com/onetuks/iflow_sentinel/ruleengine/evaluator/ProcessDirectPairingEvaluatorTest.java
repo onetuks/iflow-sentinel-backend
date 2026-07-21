@@ -1,9 +1,9 @@
 package com.onetuks.iflow_sentinel.ruleengine.evaluator;
 
 import com.onetuks.iflow_sentinel.connector.domain.artifact.Artifact;
-import com.onetuks.iflow_sentinel.domain.rule.Rule;
-import com.onetuks.iflow_sentinel.domain.rule.RuleType;
-import com.onetuks.iflow_sentinel.domain.rule.Severity;
+import com.onetuks.iflow_sentinel.rule.domain.rule.Rule;
+import com.onetuks.iflow_sentinel.rule.domain.rule.RuleType;
+import com.onetuks.iflow_sentinel.rule.domain.rule.Severity;
 import com.onetuks.iflow_sentinel.parser.model.Channel;
 import com.onetuks.iflow_sentinel.parser.model.ChannelAuth;
 import com.onetuks.iflow_sentinel.parser.model.ParsedModel;

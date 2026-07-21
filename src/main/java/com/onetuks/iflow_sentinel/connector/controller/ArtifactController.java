@@ -3,6 +3,7 @@ package com.onetuks.iflow_sentinel.connector.controller;
 import com.onetuks.iflow_sentinel.connector.dto.ArtifactResponse;
 import com.onetuks.iflow_sentinel.connector.service.ArtifactService;
 
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,5 +30,10 @@ public class ArtifactController {
     @GetMapping
     public List<ArtifactResponse> list(@PathVariable Long packageId) {
         return artifactService.list(packageId);
+    }
+
+    @DeleteMapping("/{id}")
+    public void delete(@PathVariable Long packageId, @PathVariable Long id) {
+        artifactService.delete(id);
     }
 }

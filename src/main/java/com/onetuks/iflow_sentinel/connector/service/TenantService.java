@@ -58,6 +58,23 @@ public class TenantService {
         return connectionService.testConnection(findTenant(id));
     }
 
+    public TenantResponse update(Long id, TenantRequest request) {
+        Tenant tenant = findTenant(id);
+        tenant.update(
+                request.name(),
+                request.odataUrl(),
+                request.tokenUrl(),
+                request.platformType(),
+                request.authType(),
+                request.clientId(),
+                request.clientSecret());
+        return TenantResponse.from(tenantRepository.save(tenant));
+    }
+
+    public void delete(Long id) {
+        tenantRepository.deleteById(id);
+    }
+
     private Tenant findTenant(Long id) {
         return tenantRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException("테넌트를 찾을 수 없습니다: " + id));

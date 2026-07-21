@@ -3,6 +3,7 @@ package com.onetuks.iflow_sentinel.connector.controller;
 import com.onetuks.iflow_sentinel.connector.dto.IntegrationPackageResponse;
 import com.onetuks.iflow_sentinel.connector.service.IntegrationPackageService;
 
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,5 +30,10 @@ public class IntegrationPackageController {
     @GetMapping
     public List<IntegrationPackageResponse> list(@PathVariable Long tenantId) {
         return integrationPackageService.list(tenantId);
+    }
+
+    @DeleteMapping("/{id}")
+    public void delete(@PathVariable Long tenantId, @PathVariable Long id) {
+        integrationPackageService.delete(id);
     }
 }
