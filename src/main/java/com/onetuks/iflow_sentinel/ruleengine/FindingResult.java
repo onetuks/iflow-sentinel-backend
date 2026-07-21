@@ -1,8 +1,8 @@
 package com.onetuks.iflow_sentinel.ruleengine;
 
 import com.onetuks.iflow_sentinel.connector.domain.artifact.Artifact;
-import com.onetuks.iflow_sentinel.rule.domain.rule.Rule;
-import com.onetuks.iflow_sentinel.rule.domain.rule.Severity;
+import com.onetuks.iflow_sentinel.rule.domain.Rule;
+import com.onetuks.iflow_sentinel.rule.domain.Severity;
 
 /** Rule Engine이 산출한 규칙 위반 하나. CheckRunService가 이를 Finding 엔티티로 영속화한다. */
 public record FindingResult(Artifact artifact, Rule rule, Severity severity, String location, String message) {

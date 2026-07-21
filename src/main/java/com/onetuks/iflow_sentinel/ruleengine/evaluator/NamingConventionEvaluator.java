@@ -1,7 +1,7 @@
 package com.onetuks.iflow_sentinel.ruleengine.evaluator;
 
-import com.onetuks.iflow_sentinel.rule.domain.rule.RuleType;
 import com.onetuks.iflow_sentinel.parser.model.ParsedModel;
+import com.onetuks.iflow_sentinel.rule.domain.RuleType;
 import com.onetuks.iflow_sentinel.ruleengine.ArtifactParsedModel;
 import com.onetuks.iflow_sentinel.ruleengine.EffectiveRule;
 import com.onetuks.iflow_sentinel.ruleengine.FindingResult;
@@ -38,8 +38,7 @@ public class NamingConventionEvaluator implements RuleTypeEvaluator {
                 if (!satisfiesNaming(candidate.name(), prefixes, pattern)) {
                     findings.add(new FindingResult(
                             model.artifact(), effectiveRule.rule(), effectiveRule.severity(),
-                            element + ":" + candidate.id(), effectiveRule.rule().getMessage()
-                    ));
+                            element + ":" + candidate.id(), effectiveRule.rule().getMessage()));
                 }
             }
         }

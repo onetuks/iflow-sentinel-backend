@@ -13,7 +13,7 @@ import com.onetuks.iflow_sentinel.report.domain.checkrun.CheckRunStatus;
 import com.onetuks.iflow_sentinel.report.domain.finding.Finding;
 import com.onetuks.iflow_sentinel.report.domain.finding.FindingRepository;
 import com.onetuks.iflow_sentinel.report.dto.CheckRunResponse;
-import com.onetuks.iflow_sentinel.rule.domain.rule.Severity;
+import com.onetuks.iflow_sentinel.rule.domain.Severity;
 import com.onetuks.iflow_sentinel.ruleengine.ArtifactParsedModel;
 import com.onetuks.iflow_sentinel.ruleengine.EffectiveRule;
 import com.onetuks.iflow_sentinel.ruleengine.FindingResult;
@@ -125,7 +125,8 @@ public class CheckRunService {
                 return new ArtifactParsedModel(artifact, parsedModel);
         }
 
-        private CheckRunResponse evaluateAndComplete(CheckRun checkRun, Project project, List<ArtifactParsedModel> models) {
+        private CheckRunResponse evaluateAndComplete(CheckRun checkRun, Project project,
+                        List<ArtifactParsedModel> models) {
                 List<EffectiveRule> effectiveRules = ruleResolutionService.resolveEffectiveRules(project.getId());
                 List<FindingResult> findingResults = ruleEngine.evaluate(models, effectiveRules);
 

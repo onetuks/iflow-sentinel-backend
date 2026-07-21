@@ -3,9 +3,9 @@ package com.onetuks.iflow_sentinel.ruleengine;
 import com.onetuks.iflow_sentinel.connector.domain.project.Project;
 import com.onetuks.iflow_sentinel.connector.domain.project.ProjectRule;
 import com.onetuks.iflow_sentinel.connector.domain.project.ProjectRuleRepository;
-import com.onetuks.iflow_sentinel.rule.domain.rule.Rule;
-import com.onetuks.iflow_sentinel.rule.domain.rule.RuleType;
-import com.onetuks.iflow_sentinel.rule.domain.rule.Severity;
+import com.onetuks.iflow_sentinel.rule.domain.Rule;
+import com.onetuks.iflow_sentinel.rule.domain.RuleType;
+import com.onetuks.iflow_sentinel.rule.domain.Severity;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

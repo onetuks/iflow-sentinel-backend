@@ -1,7 +1,7 @@
 package com.onetuks.iflow_sentinel.ruleengine;
 
-import com.onetuks.iflow_sentinel.rule.domain.rule.Rule;
-import com.onetuks.iflow_sentinel.rule.domain.rule.Severity;
+import com.onetuks.iflow_sentinel.rule.domain.Rule;
+import com.onetuks.iflow_sentinel.rule.domain.Severity;
 
 /**
  * 프로젝트에 적용된(ProjectRule.isEnabled=true) 규칙의 유효값. evaluator는

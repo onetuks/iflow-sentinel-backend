@@ -1,7 +1,7 @@
 package com.onetuks.iflow_sentinel.ruleengine.evaluator;
 
-import com.onetuks.iflow_sentinel.rule.domain.rule.RuleType;
 import com.onetuks.iflow_sentinel.parser.model.Channel;
+import com.onetuks.iflow_sentinel.rule.domain.RuleType;
 import com.onetuks.iflow_sentinel.ruleengine.ArtifactParsedModel;
 import com.onetuks.iflow_sentinel.ruleengine.EffectiveRule;
 import com.onetuks.iflow_sentinel.ruleengine.FindingResult;
@@ -31,8 +31,7 @@ public class AllowedAdapterTypesEvaluator implements RuleTypeEvaluator {
                 if (!allowed.isEmpty() && !allowed.contains(channel.adapterType())) {
                     findings.add(new FindingResult(
                             model.artifact(), effectiveRule.rule(), effectiveRule.severity(),
-                            "channel:" + channel.id(), effectiveRule.rule().getMessage()
-                    ));
+                            "channel:" + channel.id(), effectiveRule.rule().getMessage()));
                 }
             }
         }

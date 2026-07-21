@@ -5,8 +5,9 @@ import com.onetuks.iflow_sentinel.connector.domain.project.ProjectRepository;
 import com.onetuks.iflow_sentinel.connector.domain.project.ProjectRule;
 import com.onetuks.iflow_sentinel.connector.domain.project.ProjectRuleRepository;
 import com.onetuks.iflow_sentinel.connector.dto.ProjectRuleResponse;
-import com.onetuks.iflow_sentinel.rule.domain.rule.Rule;
-import com.onetuks.iflow_sentinel.rule.domain.rule.RuleRepository;
+import com.onetuks.iflow_sentinel.rule.domain.Rule;
+import com.onetuks.iflow_sentinel.rule.domain.RuleRepository;
+
 import org.springframework.stereotype.Service;
 
 import java.util.List;

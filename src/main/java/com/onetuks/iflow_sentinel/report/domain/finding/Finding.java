@@ -2,8 +2,9 @@ package com.onetuks.iflow_sentinel.report.domain.finding;
 
 import com.onetuks.iflow_sentinel.connector.domain.artifact.Artifact;
 import com.onetuks.iflow_sentinel.report.domain.checkrun.CheckRun;
-import com.onetuks.iflow_sentinel.rule.domain.rule.Rule;
-import com.onetuks.iflow_sentinel.rule.domain.rule.Severity;
+import com.onetuks.iflow_sentinel.rule.domain.Rule;
+import com.onetuks.iflow_sentinel.rule.domain.Severity;
+
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;

@@ -1,6 +1,6 @@
 package com.onetuks.iflow_sentinel.ruleengine.evaluator;
 
-import com.onetuks.iflow_sentinel.rule.domain.rule.RuleType;
+import com.onetuks.iflow_sentinel.rule.domain.RuleType;
 import com.onetuks.iflow_sentinel.ruleengine.ArtifactParsedModel;
 import com.onetuks.iflow_sentinel.ruleengine.EffectiveRule;
 import com.onetuks.iflow_sentinel.ruleengine.FindingResult;
@@ -10,7 +10,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/** target.element(channel/step)의 properties{}에 params.key==params.value인 설정이 있으면 위반으로 본다. */
+/**
+ * target.element(channel/step)의 properties{}에 params.key==params.value인 설정이 있으면
+ * 위반으로 본다.
+ */
 @Component
 public class ForbiddenConfigurationEvaluator implements RuleTypeEvaluator {
 

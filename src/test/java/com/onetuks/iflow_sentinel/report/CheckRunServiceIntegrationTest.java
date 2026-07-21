@@ -20,10 +20,10 @@ import com.onetuks.iflow_sentinel.report.domain.checkrun.CheckRunStatus;
 import com.onetuks.iflow_sentinel.report.domain.finding.FindingRepository;
 import com.onetuks.iflow_sentinel.report.dto.CheckRunResponse;
 import com.onetuks.iflow_sentinel.report.service.CheckRunService;
-import com.onetuks.iflow_sentinel.rule.domain.rule.Rule;
-import com.onetuks.iflow_sentinel.rule.domain.rule.RuleRepository;
-import com.onetuks.iflow_sentinel.rule.domain.rule.RuleType;
-import com.onetuks.iflow_sentinel.rule.domain.rule.Severity;
+import com.onetuks.iflow_sentinel.rule.domain.Rule;
+import com.onetuks.iflow_sentinel.rule.domain.RuleRepository;
+import com.onetuks.iflow_sentinel.rule.domain.RuleType;
+import com.onetuks.iflow_sentinel.rule.domain.Severity;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

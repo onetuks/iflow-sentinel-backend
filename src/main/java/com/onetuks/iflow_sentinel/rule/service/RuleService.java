@@ -2,8 +2,8 @@ package com.onetuks.iflow_sentinel.rule.service;
 
 import com.onetuks.iflow_sentinel.connector.domain.project.Project;
 import com.onetuks.iflow_sentinel.connector.domain.project.ProjectRepository;
-import com.onetuks.iflow_sentinel.rule.domain.rule.Rule;
-import com.onetuks.iflow_sentinel.rule.domain.rule.RuleRepository;
+import com.onetuks.iflow_sentinel.rule.domain.Rule;
+import com.onetuks.iflow_sentinel.rule.domain.RuleRepository;
 import com.onetuks.iflow_sentinel.rule.dto.RuleCreateRequest;
 import com.onetuks.iflow_sentinel.rule.dto.RuleResponse;
 import com.onetuks.iflow_sentinel.rule.dto.RuleUpdateRequest;
@@ -50,7 +50,8 @@ public class RuleService {
 
     public RuleResponse update(Long id, RuleUpdateRequest request) {
         Rule rule = findRule(id);
-        rule.updateDefinition(request.severity(), request.target(), request.params(), request.message(), request.enabled());
+        rule.updateDefinition(request.severity(), request.target(), request.params(), request.message(),
+                request.enabled());
         return RuleResponse.from(ruleRepository.save(rule));
     }
 

@@ -1,10 +1,10 @@
 package com.onetuks.iflow_sentinel.ruleengine.evaluator;
 
 import com.onetuks.iflow_sentinel.connector.domain.artifact.Artifact;
-import com.onetuks.iflow_sentinel.rule.domain.rule.Rule;
-import com.onetuks.iflow_sentinel.rule.domain.rule.RuleType;
-import com.onetuks.iflow_sentinel.rule.domain.rule.Severity;
 import com.onetuks.iflow_sentinel.parser.model.ParsedModel;
+import com.onetuks.iflow_sentinel.rule.domain.Rule;
+import com.onetuks.iflow_sentinel.rule.domain.RuleType;
+import com.onetuks.iflow_sentinel.rule.domain.Severity;
 import com.onetuks.iflow_sentinel.ruleengine.ArtifactParsedModel;
 import com.onetuks.iflow_sentinel.ruleengine.EffectiveRule;
 import com.onetuks.iflow_sentinel.ruleengine.FindingResult;

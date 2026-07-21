@@ -2,10 +2,10 @@ package com.onetuks.iflow_sentinel.rule;
 
 import com.onetuks.iflow_sentinel.connector.domain.project.Project;
 import com.onetuks.iflow_sentinel.connector.domain.project.ProjectRepository;
-import com.onetuks.iflow_sentinel.rule.domain.rule.Rule;
-import com.onetuks.iflow_sentinel.rule.domain.rule.RuleRepository;
-import com.onetuks.iflow_sentinel.rule.domain.rule.RuleType;
-import com.onetuks.iflow_sentinel.rule.domain.rule.Severity;
+import com.onetuks.iflow_sentinel.rule.domain.Rule;
+import com.onetuks.iflow_sentinel.rule.domain.RuleRepository;
+import com.onetuks.iflow_sentinel.rule.domain.RuleType;
+import com.onetuks.iflow_sentinel.rule.domain.Severity;
 import com.onetuks.iflow_sentinel.rule.dto.RuleCreateRequest;
 import com.onetuks.iflow_sentinel.rule.dto.RuleResponse;
 import com.onetuks.iflow_sentinel.rule.dto.RuleUpdateRequest;

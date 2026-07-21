@@ -1,7 +1,7 @@
 package com.onetuks.iflow_sentinel.ruleengine.evaluator;
 
-import com.onetuks.iflow_sentinel.rule.domain.rule.RuleType;
 import com.onetuks.iflow_sentinel.parser.model.Parameter;
+import com.onetuks.iflow_sentinel.rule.domain.RuleType;
 import com.onetuks.iflow_sentinel.ruleengine.ArtifactParsedModel;
 import com.onetuks.iflow_sentinel.ruleengine.EffectiveRule;
 import com.onetuks.iflow_sentinel.ruleengine.FindingResult;
@@ -29,13 +29,13 @@ public class RequiredParameterEvaluator implements RuleTypeEvaluator {
 
         List<FindingResult> findings = new ArrayList<>();
         for (ArtifactParsedModel model : models) {
-            Set<String> declared = model.parsedModel().parameters().stream().map(Parameter::name).collect(Collectors.toSet());
+            Set<String> declared = model.parsedModel().parameters().stream().map(Parameter::name)
+                    .collect(Collectors.toSet());
             for (String requiredName : requiredNames) {
                 if (!declared.contains(requiredName)) {
                     findings.add(new FindingResult(
                             model.artifact(), effectiveRule.rule(), effectiveRule.severity(),
-                            "parameter:" + requiredName, effectiveRule.rule().getMessage()
-                    ));
+                            "parameter:" + requiredName, effectiveRule.rule().getMessage()));
                 }
             }
         }
