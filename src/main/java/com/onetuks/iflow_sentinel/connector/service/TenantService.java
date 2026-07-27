@@ -33,6 +33,10 @@ public class TenantService {
         Project project = projectRepository.findById(request.projectId())
                 .orElseThrow(() -> new NoSuchElementException("프로젝트를 찾을 수 없습니다: " + request.projectId()));
 
+        if (tenantRepository.existsByProjectIdAndOdataUrl(request.projectId(), request.odataUrl())) {
+            throw new IllegalArgumentException("동일한 프로젝트에 이미 등록된 OData URL입니다.");
+        }
+
         Tenant tenant = Tenant.builder()
                 .project(project)
                 .name(request.name())
@@ -64,6 +68,12 @@ public class TenantService {
 
     public TenantResponse update(Long id, TenantRequest request) {
         Tenant tenant = findTenant(id);
+
+        if (!tenant.getOdataUrl().equals(request.odataUrl()) && 
+            tenantRepository.existsByProjectIdAndOdataUrl(tenant.getProject().getId(), request.odataUrl())) {
+            throw new IllegalArgumentException("동일한 프로젝트에 이미 등록된 OData URL입니다.");
+        }
+
         tenant.update(
                 request.name(),
                 request.odataUrl(),

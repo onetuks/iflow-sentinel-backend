@@ -7,4 +7,6 @@ import java.util.List;
 public interface TenantRepository extends JpaRepository<Tenant, Long> {
 
     List<Tenant> findByProjectId(Long projectId);
+
+    boolean existsByProjectIdAndOdataUrl(Long projectId, String odataUrl);
 }

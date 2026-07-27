@@ -29,4 +29,9 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleParser(ParserException e) {
         return ResponseEntity.status(HttpStatus.valueOf(422)).body(new ErrorResponse(e.getMessage()));
     }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(e.getMessage()));
+    }
 }
