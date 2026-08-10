@@ -58,8 +58,9 @@ public class ArtifactTrackerController {
     }
 
     @GetMapping("/export")
-    public ResponseEntity<byte[]> export(@PathVariable Long tenantId) {
-        byte[] content = artifactExportService.export(tenantId);
+    public ResponseEntity<byte[]> export(@PathVariable Long tenantId,
+            @RequestParam(required = false) List<String> artifactIds) {
+        byte[] content = artifactExportService.export(tenantId, artifactIds);
         return ResponseEntity.ok()
                 .contentType(XLSX)
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"artifacts.xlsx\"")

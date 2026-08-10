@@ -28,7 +28,16 @@ public class ArtifactExportService {
     }
 
     public byte[] export(Long tenantId) {
+        return export(tenantId, null);
+    }
+
+    public byte[] export(Long tenantId, List<String> artifactIds) {
         List<TrackerArtifactResponse> artifacts = artifactTrackerService.list(tenantId);
+        if (artifactIds != null && !artifactIds.isEmpty()) {
+            artifacts = artifacts.stream()
+                    .filter(a -> artifactIds.contains(a.artifactId()))
+                    .toList();
+        }
 
         try (XSSFWorkbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet sheet = workbook.createSheet("Artifacts");
