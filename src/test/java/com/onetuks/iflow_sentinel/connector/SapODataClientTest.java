@@ -85,4 +85,55 @@ class SapODataClientTest {
                 assertThat(result).containsExactly(1, 2, 3, 4);
                 mockServer.verify();
         }
+
+        @Test
+        void executeActionFetchesCsrfTokenThenSendsMutatingRequestWithTokenAndCookie() {
+                mockServer.expect(requestTo(TOKEN_URL))
+                                .andExpect(method(HttpMethod.POST))
+                                .andRespond(withSuccess(
+                                                "{\"access_token\":\"tok-abc\",\"expires_in\":3600,\"token_type\":\"bearer\"}",
+                                                MediaType.APPLICATION_JSON));
+                mockServer.expect(requestTo(ODATA_URL))
+                                .andExpect(method(HttpMethod.GET))
+                                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer tok-abc"))
+                                .andExpect(header("X-CSRF-Token", "Fetch"))
+                                .andRespond(withSuccess()
+                                                .header("X-CSRF-Token", "csrf-xyz")
+                                                .header(HttpHeaders.SET_COOKIE, "JSESSIONID=abc123; Path=/; HttpOnly"));
+                mockServer.expect(requestTo(ODATA_URL + "/DeployIntegrationDesigntimeArtifact?Id='ART1'&Version='active'"))
+                                .andExpect(method(HttpMethod.POST))
+                                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer tok-abc"))
+                                .andExpect(header("X-CSRF-Token", "csrf-xyz"))
+                                .andExpect(header(HttpHeaders.COOKIE, "JSESSIONID=abc123"))
+                                .andRespond(withSuccess());
+
+                odataClient.executeAction(tenant, HttpMethod.POST,
+                                "/DeployIntegrationDesigntimeArtifact?Id='ART1'&Version='active'");
+
+                mockServer.verify();
+        }
+
+        @Test
+        void executeActionSupportsDeleteMethod() {
+                mockServer.expect(requestTo(TOKEN_URL))
+                                .andExpect(method(HttpMethod.POST))
+                                .andRespond(withSuccess(
+                                                "{\"access_token\":\"tok-abc\",\"expires_in\":3600,\"token_type\":\"bearer\"}",
+                                                MediaType.APPLICATION_JSON));
+                mockServer.expect(requestTo(ODATA_URL))
+                                .andExpect(method(HttpMethod.GET))
+                                .andExpect(header("X-CSRF-Token", "Fetch"))
+                                .andRespond(withSuccess()
+                                                .header("X-CSRF-Token", "csrf-xyz")
+                                                .header(HttpHeaders.SET_COOKIE, "JSESSIONID=abc123; Path=/; HttpOnly"));
+                mockServer.expect(requestTo(ODATA_URL + "/IntegrationRuntimeArtifacts('ART1')"))
+                                .andExpect(method(HttpMethod.DELETE))
+                                .andExpect(header("X-CSRF-Token", "csrf-xyz"))
+                                .andExpect(header(HttpHeaders.COOKIE, "JSESSIONID=abc123"))
+                                .andRespond(withSuccess());
+
+                odataClient.executeAction(tenant, HttpMethod.DELETE, "/IntegrationRuntimeArtifacts('ART1')");
+
+                mockServer.verify();
+        }
 }
