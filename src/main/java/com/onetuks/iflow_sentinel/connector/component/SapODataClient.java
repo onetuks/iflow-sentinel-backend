@@ -6,13 +6,16 @@ import com.onetuks.iflow_sentinel.exception.ConnectorException;
 
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * SAP IS OData API 인증 호출 공용 헬퍼. {@code tenant.odataUrl()}은 "/api/v1"까지 포함한 베이스
@@ -71,5 +74,58 @@ public class SapODataClient {
         } catch (ResourceAccessException e) {
             throw new ConnectorException("아티팩트 다운로드 중 연결할 수 없습니다: " + relativePath, -1, e);
         }
+    }
+
+    /**
+     * SAP OData 상태 변경 요청(POST/DELETE)을 실행한다. SAP OData는 GET이 아닌 요청에 대해 CSRF 토큰을
+     * 요구하므로, 먼저 {@code X-CSRF-Token: Fetch} 헤더로 토큰/세션 쿠키를 받아온 뒤 실제 요청에 실어 보낸다.
+     */
+    public void executeAction(Tenant tenant, HttpMethod method, String relativePath) {
+        String token = tokenProvider.getAccessToken(tenant);
+        CsrfToken csrf = fetchCsrfToken(tenant, token);
+        try {
+            restClient.method(method)
+                    .uri(tenant.getOdataUrl() + relativePath)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                    .header("X-CSRF-Token", csrf.token())
+                    .header(HttpHeaders.COOKIE, csrf.cookie())
+                    .accept(MediaType.APPLICATION_JSON)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientResponseException e) {
+            throw new ConnectorException("SAP 액션 호출 실패: HTTP " + e.getStatusCode().value() + " " + relativePath,
+                    e.getStatusCode().value(), e);
+        } catch (ResourceAccessException e) {
+            throw new ConnectorException("SAP 엔드포인트에 연결할 수 없습니다: " + relativePath, -1, e);
+        }
+    }
+
+    private CsrfToken fetchCsrfToken(Tenant tenant, String accessToken) {
+        try {
+            ResponseEntity<Void> response = restClient.get()
+                    .uri(tenant.getOdataUrl())
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                    .header("X-CSRF-Token", "Fetch")
+                    .retrieve()
+                    .toBodilessEntity();
+
+            String token = response.getHeaders().getFirst("X-CSRF-Token");
+            if (token == null) {
+                throw new ConnectorException("CSRF 토큰을 발급받지 못했습니다.", 200);
+            }
+            List<String> setCookies = response.getHeaders().get(HttpHeaders.SET_COOKIE);
+            String cookie = setCookies == null ? "" : setCookies.stream()
+                    .map(c -> c.split(";", 2)[0])
+                    .collect(Collectors.joining("; "));
+            return new CsrfToken(token, cookie);
+        } catch (RestClientResponseException e) {
+            throw new ConnectorException("CSRF 토큰 발급 실패: HTTP " + e.getStatusCode().value(),
+                    e.getStatusCode().value(), e);
+        } catch (ResourceAccessException e) {
+            throw new ConnectorException("CSRF 토큰 발급 중 연결할 수 없습니다: " + e.getMessage(), -1, e);
+        }
+    }
+
+    private record CsrfToken(String token, String cookie) {
     }
 }

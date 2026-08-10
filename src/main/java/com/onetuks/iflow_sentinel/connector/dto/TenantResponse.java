@@ -13,7 +13,9 @@ public record TenantResponse(
         String tokenUrl,
         TenantPlatform platformType,
         TenantAuthType authType,
-        String clientId) {
+        String clientId,
+        String status,
+        Integer packageCount) {
     public static TenantResponse from(Tenant tenant) {
         return new TenantResponse(
                 tenant.getId(),
@@ -23,6 +25,8 @@ public record TenantResponse(
                 tenant.getTokenUrl(),
                 tenant.getPlatformType(),
                 tenant.getAuthType(),
-                tenant.getClientId());
+                tenant.getClientId(),
+                "connected",
+                0);
     }
 }

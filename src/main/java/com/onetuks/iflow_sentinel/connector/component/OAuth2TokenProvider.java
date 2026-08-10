@@ -5,16 +5,14 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
 import com.onetuks.iflow_sentinel.exception.ConnectorException;
 
-import org.springframework.http.HttpHeaders;
+
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.ResourceAccessException;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.Base64;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -46,12 +44,21 @@ public class OAuth2TokenProvider {
 
     /** 캐시를 거치지 않고 항상 새로 토큰 발급을 시도한다. 연결 테스트(TNT-005) 전용. */
     public CachedToken fetchToken(Tenant tenant) {
+        String tokenUrl = tenant.getTokenUrl();
+        if (!tokenUrl.endsWith("/oauth/token")) {
+            tokenUrl = tokenUrl.endsWith("/") ? tokenUrl + "oauth/token" : tokenUrl + "/oauth/token";
+        }
+
         try {
+            String requestBody = "grant_type=client_credentials"
+                    + "&client_id=" + java.net.URLEncoder.encode(tenant.getClientId(), java.nio.charset.StandardCharsets.UTF_8)
+                    + "&client_secret=" + java.net.URLEncoder.encode(tenant.getClientSecret(), java.nio.charset.StandardCharsets.UTF_8);
+
             TokenResponse response = restClient.post()
-                    .uri(tenant.getTokenUrl())
-                    .header(HttpHeaders.AUTHORIZATION, basicAuth(tenant.getClientId(), tenant.getClientSecret()))
+                    .uri(tokenUrl)
+                    .headers(headers -> headers.setBasicAuth(tenant.getClientId(), tenant.getClientSecret()))
                     .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                    .body("grant_type=client_credentials")
+                    .body(requestBody)
                     .retrieve()
                     .body(TokenResponse.class);
 
@@ -66,11 +73,6 @@ public class OAuth2TokenProvider {
         } catch (ResourceAccessException e) {
             throw new ConnectorException("토큰 엔드포인트에 연결할 수 없습니다: " + e.getMessage(), -1, e);
         }
-    }
-
-    private static String basicAuth(String clientId, String clientSecret) {
-        String credentials = clientId + ":" + clientSecret;
-        return "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
     }
 
     public record CachedToken(String accessToken, Instant expiresAt) {

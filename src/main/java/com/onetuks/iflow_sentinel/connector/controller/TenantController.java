@@ -5,6 +5,8 @@ import com.onetuks.iflow_sentinel.connector.dto.TenantRequest;
 import com.onetuks.iflow_sentinel.connector.dto.TenantResponse;
 import com.onetuks.iflow_sentinel.connector.service.TenantService;
 
+import jakarta.validation.Valid;
+
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,7 +30,7 @@ public class TenantController {
     }
 
     @PostMapping
-    public TenantResponse create(@RequestBody TenantRequest request) {
+    public TenantResponse create(@Valid @RequestBody TenantRequest request) {
         return tenantService.create(request);
     }
 
@@ -42,8 +44,17 @@ public class TenantController {
         return tenantService.get(id);
     }
 
+    @PostMapping("/test-connection")
+    public ConnectionTestResult testConnection(@RequestBody TenantRequest request) {
+        return tenantService.testConnection(request);
+    }
+
     @PostMapping("/{id}/test-connection")
-    public ConnectionTestResult testConnection(@PathVariable Long id) {
+    public ConnectionTestResult testConnection(@PathVariable Long id,
+            @RequestBody(required = false) TenantRequest request) {
+        if (request != null) {
+            return tenantService.testConnection(id, request);
+        }
         return tenantService.testConnection(id);
     }
 

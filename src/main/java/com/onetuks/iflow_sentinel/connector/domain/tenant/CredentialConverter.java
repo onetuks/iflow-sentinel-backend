@@ -55,7 +55,12 @@ public class CredentialConverter implements AttributeConverter<String, String> {
             return null;
         }
         try {
-            ByteBuffer buffer = ByteBuffer.wrap(Base64.getDecoder().decode(dbData));
+            // 빈 문자열이거나 Base64 형식이 아니면 예외가 발생하므로 모두 처리
+            byte[] decoded = Base64.getDecoder().decode(dbData);
+            if (decoded.length < GCM_IV_LENGTH) {
+                return dbData; // IV 길이보다 짧으면 암호문이 아님 (평문 반환)
+            }
+            ByteBuffer buffer = ByteBuffer.wrap(decoded);
             byte[] iv = new byte[GCM_IV_LENGTH];
             buffer.get(iv);
             byte[] cipherText = new byte[buffer.remaining()];
@@ -63,8 +68,9 @@ public class CredentialConverter implements AttributeConverter<String, String> {
             Cipher cipher = Cipher.getInstance(ALGORITHM);
             cipher.init(Cipher.DECRYPT_MODE, secretKey, new GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv));
             return new String(cipher.doFinal(cipherText), StandardCharsets.UTF_8);
-        } catch (GeneralSecurityException e) {
-            throw new IllegalStateException("자격증명 복호화에 실패했습니다.", e);
+        } catch (GeneralSecurityException | RuntimeException e) {
+            // 복호화 실패 시 (기존 평문 데이터거나 형식이 맞지 않는 경우) 원본 반환
+            return dbData;
         }
     }
 }
