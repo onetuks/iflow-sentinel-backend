@@ -19,23 +19,26 @@ public class ApiLoggingFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        
+
         // 정적 리소스(CSS, JS 등) 요청은 로깅에서 제외하고 싶다면 아래 주석을 해제하세요
         // if (request.getRequestURI().startsWith("/assets")) {
-        //     filterChain.doFilter(request, response);
-        //     return;
+        // filterChain.doFilter(request, response);
+        // return;
         // }
 
         long startTime = System.currentTimeMillis();
-        
+        String uri = request.getQueryString() != null
+                ? request.getRequestURI() + "?" + request.getQueryString()
+                : request.getRequestURI();
+
         try {
             filterChain.doFilter(request, response);
         } finally {
             long duration = System.currentTimeMillis() - startTime;
-            log.info("[API LOG] {} {} - Status: {} ({}ms)", 
-                    request.getMethod(), 
-                    request.getRequestURI(), 
-                    response.getStatus(), 
+            log.info("[API LOG] {} {} - Status: {} ({}ms)",
+                    request.getMethod(),
+                    uri,
+                    response.getStatus(),
                     duration);
         }
     }
