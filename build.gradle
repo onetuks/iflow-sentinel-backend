@@ -41,6 +41,9 @@ dependencies {
 
 	// Deploy
 	developmentOnly 'org.springframework.boot:spring-boot-docker-compose'
+
+	// Excel export
+	implementation 'org.apache.poi:poi-ooxml:5.3.0'
 }
 
 tasks.named('test') {

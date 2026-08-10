@@ -3,6 +3,7 @@ package com.onetuks.iflow_sentinel.exception;
 import com.onetuks.iflow_sentinel.parser.ParserException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.jpa.JpaSystemException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -11,6 +12,11 @@ import java.util.NoSuchElementException;
 /** 컨트롤러 전반에서 공통으로 발생하는 예외를 의미 있는 HTTP 상태 코드로 변환한다. */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(JpaSystemException.class)
+    public ResponseEntity<ErrorResponse> handleJpaSystemException(JpaSystemException e) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ErrorResponse(e.getMessage()));
+    }
 
     @ExceptionHandler(NoSuchElementException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(NoSuchElementException e) {
