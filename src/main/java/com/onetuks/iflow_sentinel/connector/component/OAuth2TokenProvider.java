@@ -6,6 +6,8 @@ import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
 import com.onetuks.iflow_sentinel.exception.ConnectorException;
 
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -21,6 +23,8 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Component
 public class OAuth2TokenProvider {
+
+    private static final Logger log = LoggerFactory.getLogger(OAuth2TokenProvider.class);
 
     private static final long EXPIRY_SAFETY_MARGIN_SECONDS = 60;
 
@@ -48,6 +52,7 @@ public class OAuth2TokenProvider {
         if (!tokenUrl.endsWith("/oauth/token")) {
             tokenUrl = tokenUrl.endsWith("/") ? tokenUrl + "oauth/token" : tokenUrl + "/oauth/token";
         }
+        log.info("[OUTBOUND OAuth2] Fetching token from {}", tokenUrl);
 
         try {
             String requestBody = "grant_type=client_credentials"

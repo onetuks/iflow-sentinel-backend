@@ -4,6 +4,8 @@ import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
 import com.onetuks.iflow_sentinel.connector.dto.ODataCollectionResponse;
 import com.onetuks.iflow_sentinel.exception.ConnectorException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -26,6 +28,8 @@ import java.util.stream.Collectors;
 @Component
 public class SapODataClient {
 
+    private static final Logger log = LoggerFactory.getLogger(SapODataClient.class);
+
     private final OAuth2TokenProvider tokenProvider;
     private final RestClient restClient;
 
@@ -38,6 +42,7 @@ public class SapODataClient {
             ParameterizedTypeReference<ODataCollectionResponse<T>> typeRef) {
         String token = tokenProvider.getAccessToken(tenant);
         String fullUrl = buildUrl(tenant.getOdataUrl(), relativePath);
+        log.info("[OUTBOUND SAP OData] GET {}", fullUrl);
         try {
             ODataCollectionResponse<T> response = restClient.get()
                     .uri(fullUrl)
@@ -60,6 +65,7 @@ public class SapODataClient {
     public byte[] getBinary(Tenant tenant, String relativePath) {
         String token = tokenProvider.getAccessToken(tenant);
         String fullUrl = buildUrl(tenant.getOdataUrl(), relativePath);
+        log.info("[OUTBOUND SAP OData] GET (Binary) {}", fullUrl);
         try {
             byte[] body = restClient.get()
                     .uri(fullUrl)
@@ -86,6 +92,7 @@ public class SapODataClient {
         String token = tokenProvider.getAccessToken(tenant);
         CsrfToken csrf = fetchCsrfToken(tenant, token);
         String fullUrl = buildUrl(tenant.getOdataUrl(), relativePath);
+        log.info("[OUTBOUND SAP OData] {} {}", method, fullUrl);
         try {
             restClient.method(method)
                     .uri(fullUrl)

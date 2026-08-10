@@ -20,12 +20,14 @@ public class ArtifactTrackerActionService {
     private final TenantRepository tenantRepository;
     private final ArtifactRepository artifactRepository;
     private final SapODataClient odataClient;
+    private final TenantService tenantService;
 
     public ArtifactTrackerActionService(TenantRepository tenantRepository, ArtifactRepository artifactRepository,
-            SapODataClient odataClient) {
+            SapODataClient odataClient, TenantService tenantService) {
         this.tenantRepository = tenantRepository;
         this.artifactRepository = artifactRepository;
         this.odataClient = odataClient;
+        this.tenantService = tenantService;
     }
 
     /** 지정한 design-time 아티팩트의 활성(active) 버전을 배포한다. */
@@ -33,6 +35,7 @@ public class ArtifactTrackerActionService {
         Tenant tenant = findTenant(tenantId);
         String relativePath = "/DeployIntegrationDesigntimeArtifact?Id='" + artifactId + "'&Version='active'";
         odataClient.executeAction(tenant, HttpMethod.POST, relativePath);
+        tenantService.sync(tenantId);
     }
 
     /** 배포된 runtime 아티팩트를 undeploy 한다. */
@@ -40,6 +43,7 @@ public class ArtifactTrackerActionService {
         Tenant tenant = findTenant(tenantId);
         String relativePath = "/IntegrationRuntimeArtifacts('" + artifactId + "')";
         odataClient.executeAction(tenant, HttpMethod.DELETE, relativePath);
+        tenantService.sync(tenantId);
     }
 
     /** design-time 아티팩트를 삭제한다. 로컬에 동기화된 레코드가 있으면 함께 제거한다. */
@@ -48,6 +52,7 @@ public class ArtifactTrackerActionService {
         String relativePath = "/IntegrationDesigntimeArtifacts(Id='" + artifactId + "',Version='" + version + "')";
         odataClient.executeAction(tenant, HttpMethod.DELETE, relativePath);
         artifactRepository.findBySapArtifactId(artifactId).ifPresent(artifactRepository::delete);
+        tenantService.sync(tenantId);
     }
 
     private Tenant findTenant(Long tenantId) {

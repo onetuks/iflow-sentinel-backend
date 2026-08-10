@@ -6,6 +6,7 @@ import com.onetuks.iflow_sentinel.connector.domain.artifact.ArtifactRepository;
 import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
 import com.onetuks.iflow_sentinel.connector.domain.tenant.TenantRepository;
 import com.onetuks.iflow_sentinel.connector.service.ArtifactTrackerActionService;
+import com.onetuks.iflow_sentinel.connector.service.TenantService;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,6 +34,9 @@ class ArtifactTrackerActionServiceTest {
     @Mock
     private SapODataClient odataClient;
 
+    @Mock
+    private TenantService tenantService;
+
     private final Tenant tenant = TenantTestFixtures.tenant(1L, "https://tenant.example.com/api/v1",
             "https://tenant.example.com/oauth/token");
 
@@ -41,11 +45,12 @@ class ArtifactTrackerActionServiceTest {
         when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
 
         ArtifactTrackerActionService service = new ArtifactTrackerActionService(tenantRepository, artifactRepository,
-                odataClient);
+                odataClient, tenantService);
         service.deploy(1L, "ART1");
 
         verify(odataClient).executeAction(tenant, HttpMethod.POST,
                 "/DeployIntegrationDesigntimeArtifact?Id='ART1'&Version='active'");
+        verify(tenantService).sync(1L);
     }
 
     @Test
@@ -53,10 +58,11 @@ class ArtifactTrackerActionServiceTest {
         when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
 
         ArtifactTrackerActionService service = new ArtifactTrackerActionService(tenantRepository, artifactRepository,
-                odataClient);
+                odataClient, tenantService);
         service.undeploy(1L, "ART1");
 
         verify(odataClient).executeAction(tenant, HttpMethod.DELETE, "/IntegrationRuntimeArtifacts('ART1')");
+        verify(tenantService).sync(1L);
     }
 
     @Test
@@ -66,12 +72,13 @@ class ArtifactTrackerActionServiceTest {
         when(artifactRepository.findBySapArtifactId("ART1")).thenReturn(Optional.of(localArtifact));
 
         ArtifactTrackerActionService service = new ArtifactTrackerActionService(tenantRepository, artifactRepository,
-                odataClient);
+                odataClient, tenantService);
         service.deleteDesigntimeArtifact(1L, "ART1", "1.0.0");
 
         verify(odataClient).executeAction(tenant, HttpMethod.DELETE,
                 "/IntegrationDesigntimeArtifacts(Id='ART1',Version='1.0.0')");
         verify(artifactRepository).delete(localArtifact);
+        verify(tenantService).sync(1L);
     }
 
     @Test
@@ -80,10 +87,11 @@ class ArtifactTrackerActionServiceTest {
         when(artifactRepository.findBySapArtifactId("ART3")).thenReturn(Optional.empty());
 
         ArtifactTrackerActionService service = new ArtifactTrackerActionService(tenantRepository, artifactRepository,
-                odataClient);
+                odataClient, tenantService);
         service.deleteDesigntimeArtifact(1L, "ART3", "1.0.0");
 
         verify(artifactRepository, never()).delete(org.mockito.ArgumentMatchers.any());
+        verify(tenantService).sync(1L);
     }
 
     @Test
@@ -91,7 +99,7 @@ class ArtifactTrackerActionServiceTest {
         when(tenantRepository.findById(99L)).thenReturn(Optional.empty());
 
         ArtifactTrackerActionService service = new ArtifactTrackerActionService(tenantRepository, artifactRepository,
-                odataClient);
+                odataClient, tenantService);
 
         assertThatThrownBy(() -> service.deploy(99L, "ART1")).isInstanceOf(NoSuchElementException.class);
     }
