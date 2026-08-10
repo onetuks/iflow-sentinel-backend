@@ -9,5 +9,7 @@ public interface ArtifactRepository extends JpaRepository<Artifact, Long> {
 
     List<Artifact> findByIntegrationPackageId(Long integrationPackageId);
 
+    List<Artifact> findByIntegrationPackageTenantId(Long tenantId);
+
     Optional<Artifact> findBySapArtifactId(String sapArtifactId);
 }

@@ -53,7 +53,8 @@ public class Artifact {
         this.type = type;
     }
 
-    public void updateFrom(String name, String version, ArtifactType type) {
+    public void updateFrom(IntegrationPackage integrationPackage, String name, String version, ArtifactType type) {
+        this.integrationPackage = integrationPackage;
         this.name = name;
         this.version = version;
         this.type = type;

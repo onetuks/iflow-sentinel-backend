@@ -37,9 +37,10 @@ public class SapODataClient {
     public <T> List<T> getCollection(Tenant tenant, String relativePath,
             ParameterizedTypeReference<ODataCollectionResponse<T>> typeRef) {
         String token = tokenProvider.getAccessToken(tenant);
+        String fullUrl = buildUrl(tenant.getOdataUrl(), relativePath);
         try {
             ODataCollectionResponse<T> response = restClient.get()
-                    .uri(tenant.getOdataUrl() + relativePath)
+                    .uri(fullUrl)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                     .accept(MediaType.APPLICATION_JSON)
                     .retrieve()
@@ -49,30 +50,31 @@ public class SapODataClient {
             }
             return response.d().results();
         } catch (RestClientResponseException e) {
-            throw new ConnectorException("OData 호출 실패: HTTP " + e.getStatusCode().value() + " " + relativePath,
+            throw new ConnectorException("OData 호출 실패 (HTTP " + e.getStatusCode().value() + "): " + fullUrl,
                     e.getStatusCode().value(), e);
         } catch (ResourceAccessException e) {
-            throw new ConnectorException("OData 엔드포인트에 연결할 수 없습니다: " + relativePath, -1, e);
+            throw new ConnectorException("OData 엔드포인트에 연결할 수 없습니다: " + fullUrl + " (원인: " + e.getMessage() + ")", -1, e);
         }
     }
 
     public byte[] getBinary(Tenant tenant, String relativePath) {
         String token = tokenProvider.getAccessToken(tenant);
+        String fullUrl = buildUrl(tenant.getOdataUrl(), relativePath);
         try {
             byte[] body = restClient.get()
-                    .uri(tenant.getOdataUrl() + relativePath)
+                    .uri(fullUrl)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                     .retrieve()
                     .body(byte[].class);
             if (body == null) {
-                throw new ConnectorException("빈 응답을 받았습니다: " + relativePath, 200);
+                throw new ConnectorException("빈 응답을 받았습니다: " + fullUrl, 200);
             }
             return body;
         } catch (RestClientResponseException e) {
-            throw new ConnectorException("아티팩트 다운로드 실패: HTTP " + e.getStatusCode().value() + " " + relativePath,
+            throw new ConnectorException("아티팩트 다운로드 실패 (HTTP " + e.getStatusCode().value() + "): " + fullUrl,
                     e.getStatusCode().value(), e);
         } catch (ResourceAccessException e) {
-            throw new ConnectorException("아티팩트 다운로드 중 연결할 수 없습니다: " + relativePath, -1, e);
+            throw new ConnectorException("아티팩트 다운로드 중 연결할 수 없습니다: " + fullUrl + " (원인: " + e.getMessage() + ")", -1, e);
         }
     }
 
@@ -83,9 +85,10 @@ public class SapODataClient {
     public void executeAction(Tenant tenant, HttpMethod method, String relativePath) {
         String token = tokenProvider.getAccessToken(tenant);
         CsrfToken csrf = fetchCsrfToken(tenant, token);
+        String fullUrl = buildUrl(tenant.getOdataUrl(), relativePath);
         try {
             restClient.method(method)
-                    .uri(tenant.getOdataUrl() + relativePath)
+                    .uri(fullUrl)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                     .header("X-CSRF-Token", csrf.token())
                     .header(HttpHeaders.COOKIE, csrf.cookie())
@@ -93,17 +96,18 @@ public class SapODataClient {
                     .retrieve()
                     .toBodilessEntity();
         } catch (RestClientResponseException e) {
-            throw new ConnectorException("SAP 액션 호출 실패: HTTP " + e.getStatusCode().value() + " " + relativePath,
+            throw new ConnectorException("SAP 액션 호출 실패 (HTTP " + e.getStatusCode().value() + "): " + fullUrl,
                     e.getStatusCode().value(), e);
         } catch (ResourceAccessException e) {
-            throw new ConnectorException("SAP 엔드포인트에 연결할 수 없습니다: " + relativePath, -1, e);
+            throw new ConnectorException("SAP 엔드포인트에 연결할 수 없습니다: " + fullUrl + " (원인: " + e.getMessage() + ")", -1, e);
         }
     }
 
     private CsrfToken fetchCsrfToken(Tenant tenant, String accessToken) {
+        String baseUrl = buildUrl(tenant.getOdataUrl(), "");
         try {
             ResponseEntity<Void> response = restClient.get()
-                    .uri(tenant.getOdataUrl())
+                    .uri(baseUrl)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
                     .header("X-CSRF-Token", "Fetch")
                     .retrieve()
@@ -119,11 +123,36 @@ public class SapODataClient {
                     .collect(Collectors.joining("; "));
             return new CsrfToken(token, cookie);
         } catch (RestClientResponseException e) {
-            throw new ConnectorException("CSRF 토큰 발급 실패: HTTP " + e.getStatusCode().value(),
+            throw new ConnectorException("CSRF 토큰 발급 실패 (HTTP " + e.getStatusCode().value() + "): " + baseUrl,
                     e.getStatusCode().value(), e);
         } catch (ResourceAccessException e) {
-            throw new ConnectorException("CSRF 토큰 발급 중 연결할 수 없습니다: " + e.getMessage(), -1, e);
+            throw new ConnectorException("CSRF 토큰 발급 중 연결할 수 없습니다: " + baseUrl + " (원인: " + e.getMessage() + ")", -1, e);
         }
+    }
+
+    private String buildUrl(String baseUrl, String relativePath) {
+        if (baseUrl == null) {
+            baseUrl = "";
+        }
+        baseUrl = baseUrl.trim();
+
+        if (baseUrl.endsWith("/")) {
+            baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
+        }
+
+        if (!baseUrl.contains("/api/v1")) {
+            baseUrl = baseUrl + "/api/v1";
+        }
+
+        if (relativePath == null || relativePath.isEmpty()) {
+            return baseUrl;
+        }
+
+        if (!relativePath.startsWith("/")) {
+            relativePath = "/" + relativePath;
+        }
+
+        return baseUrl + relativePath;
     }
 
     private record CsrfToken(String token, String cookie) {

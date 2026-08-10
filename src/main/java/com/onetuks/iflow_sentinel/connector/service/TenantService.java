@@ -1,5 +1,6 @@
 package com.onetuks.iflow_sentinel.connector.service;
 
+import com.onetuks.iflow_sentinel.connector.domain.integrationpackage.IntegrationPackage;
 import com.onetuks.iflow_sentinel.connector.domain.project.Project;
 import com.onetuks.iflow_sentinel.connector.domain.project.ProjectRepository;
 import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
@@ -21,13 +22,16 @@ public class TenantService {
     private final ProjectRepository projectRepository;
     private final TenantConnectionService connectionService;
     private final PackageSyncService packageSyncService;
+    private final ArtifactSyncService artifactSyncService;
 
     public TenantService(TenantRepository tenantRepository, ProjectRepository projectRepository,
-            TenantConnectionService connectionService, PackageSyncService packageSyncService) {
+            TenantConnectionService connectionService, PackageSyncService packageSyncService,
+            ArtifactSyncService artifactSyncService) {
         this.tenantRepository = tenantRepository;
         this.projectRepository = projectRepository;
         this.connectionService = connectionService;
         this.packageSyncService = packageSyncService;
+        this.artifactSyncService = artifactSyncService;
     }
 
     @Transactional
@@ -56,7 +60,7 @@ public class TenantService {
         }
 
         Tenant saved = tenantRepository.save(tenant);
-        packageSyncService.syncPackages(saved);
+        syncTenantData(saved);
         return TenantResponse.from(saved);
     }
 
@@ -135,6 +139,29 @@ public class TenantService {
     @Transactional
     public void delete(Long id) {
         tenantRepository.deleteById(id);
+    }
+
+    @Transactional
+    public void sync(Long id) {
+        Tenant tenant = findTenant(id);
+        syncTenantData(tenant);
+    }
+
+    private void syncTenantData(Tenant tenant) {
+        List<IntegrationPackage> packages = packageSyncService.syncPackages(tenant);
+        java.util.Set<String> activeArtifactIds = new java.util.HashSet<>();
+        for (IntegrationPackage pkg : packages) {
+            var syncedArtifacts = artifactSyncService.syncArtifacts(pkg);
+            for (var artifact : syncedArtifacts) {
+                activeArtifactIds.add(artifact.getSapArtifactId());
+            }
+        }
+        artifactSyncService.cleanOrphanArtifacts(tenant, activeArtifactIds);
+
+        java.util.Set<String> activePackageIds = packages.stream()
+                .map(IntegrationPackage::getSapPackageId)
+                .collect(java.util.stream.Collectors.toSet());
+        packageSyncService.cleanOrphanPackages(tenant, activePackageIds);
     }
 
     @Transactional(readOnly = true)

@@ -9,6 +9,9 @@ import com.onetuks.iflow_sentinel.connector.domain.project.ProjectRepository;
 import com.onetuks.iflow_sentinel.connector.dto.ConnectionTestResult;
 import com.onetuks.iflow_sentinel.connector.dto.TenantRequest;
 import com.onetuks.iflow_sentinel.connector.dto.TenantResponse;
+import com.onetuks.iflow_sentinel.connector.domain.integrationpackage.IntegrationPackage;
+import com.onetuks.iflow_sentinel.connector.service.ArtifactSyncService;
+import com.onetuks.iflow_sentinel.connector.service.PackageSyncService;
 import com.onetuks.iflow_sentinel.connector.service.TenantConnectionService;
 import com.onetuks.iflow_sentinel.connector.service.TenantService;
 
@@ -17,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,7 +44,10 @@ class TenantServiceTest {
     private TenantConnectionService connectionService;
 
     @Mock
-    private com.onetuks.iflow_sentinel.connector.service.PackageSyncService packageSyncService;
+    private PackageSyncService packageSyncService;
+
+    @Mock
+    private ArtifactSyncService artifactSyncService;
 
     private final Tenant tenant = TenantTestFixtures.tenant(1L, "https://old.example.com/api/v1",
             "https://old.example.com/oauth/token");
@@ -48,12 +55,15 @@ class TenantServiceTest {
     @Test
     void createSucceedsWhenConnectionTestPasses() {
         TenantService service = new TenantService(tenantRepository, projectRepository, connectionService,
-                packageSyncService);
+                packageSyncService, artifactSyncService);
         Project project = Project.builder().name("Test Project").build();
+        IntegrationPackage pkg = IntegrationPackage.builder().sapPackageId("PKG1").name("Package 1").tenant(tenant).build();
+
         when(projectRepository.findById(1L)).thenReturn(Optional.of(project));
         when(tenantRepository.existsByProjectIdAndOdataUrl(any(), any())).thenReturn(false);
         when(connectionService.testConnection(any())).thenReturn(new ConnectionTestResult(true, 200, "연결에 성공했습니다."));
         when(tenantRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(packageSyncService.syncPackages(any())).thenReturn(List.of(pkg));
 
         TenantRequest request = new TenantRequest(
                 1L,
@@ -69,12 +79,13 @@ class TenantServiceTest {
 
         assertThat(response.name()).isEqualTo("New Tenant");
         verify(packageSyncService).syncPackages(any());
+        verify(artifactSyncService).syncArtifacts(pkg);
     }
 
     @Test
     void createThrowsExceptionWhenConnectionTestFails() {
         TenantService service = new TenantService(tenantRepository, projectRepository, connectionService,
-                packageSyncService);
+                packageSyncService, artifactSyncService);
         Project project = Project.builder().name("Test Project").build();
         when(projectRepository.findById(1L)).thenReturn(Optional.of(project));
         when(tenantRepository.existsByProjectIdAndOdataUrl(any(), any())).thenReturn(false);
@@ -97,12 +108,13 @@ class TenantServiceTest {
 
         verify(tenantRepository, never()).save(any());
         verify(packageSyncService, never()).syncPackages(any());
+        verify(artifactSyncService, never()).syncArtifacts(any());
     }
 
     @Test
     void updateAppliesAllRequestedFieldsToTheEntity() {
         TenantService service = new TenantService(tenantRepository, projectRepository, connectionService,
-                packageSyncService);
+                packageSyncService, artifactSyncService);
         when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
         when(tenantRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -128,7 +140,7 @@ class TenantServiceTest {
     @Test
     void deleteDelegatesToRepository() {
         TenantService service = new TenantService(tenantRepository, projectRepository, connectionService,
-                packageSyncService);
+                packageSyncService, artifactSyncService);
 
         service.delete(1L);
 

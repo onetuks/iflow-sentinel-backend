@@ -15,3 +15,7 @@ spring:
 iflow-sentinel:
     security:
         credential-key: ${CREDENTIAL_ENCRYPTION_KEY:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
+
+app:
+    tenant:
+        sync-cron: "0 */10 * * * *"

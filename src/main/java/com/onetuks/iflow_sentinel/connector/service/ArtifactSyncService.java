@@ -5,6 +5,7 @@ import com.onetuks.iflow_sentinel.connector.domain.artifact.Artifact;
 import com.onetuks.iflow_sentinel.connector.domain.artifact.ArtifactRepository;
 import com.onetuks.iflow_sentinel.connector.domain.artifact.ArtifactType;
 import com.onetuks.iflow_sentinel.connector.domain.integrationpackage.IntegrationPackage;
+import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
 import com.onetuks.iflow_sentinel.connector.dto.ODataCollectionResponse;
 import com.onetuks.iflow_sentinel.connector.dto.SapArtifactDto;
 
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * ART-002: 패키지 내 iFlow 아티팩트 목록을 OData로 조회해 DB에 upsert한다.
@@ -43,7 +45,7 @@ public class ArtifactSyncService {
         for (SapArtifactDto dto : dtos) {
             Artifact existing = artifactRepository.findBySapArtifactId(dto.Id()).orElse(null);
             if (existing != null) {
-                existing.updateFrom(dto.Name(), dto.Version(), ArtifactType.IFLOW);
+                existing.updateFrom(integrationPackage, dto.Name(), dto.Version(), ArtifactType.IFLOW);
                 result.add(artifactRepository.save(existing));
             } else {
                 Artifact created = Artifact.builder()
@@ -57,5 +59,16 @@ public class ArtifactSyncService {
             }
         }
         return result;
+    }
+
+    public void cleanOrphanArtifacts(Tenant tenant, Set<String> activeSapArtifactIds) {
+        List<Artifact> existingArtifacts = artifactRepository.findByIntegrationPackageTenantId(tenant.getId());
+        List<Artifact> orphans = existingArtifacts.stream()
+                .filter(art -> !activeSapArtifactIds.contains(art.getSapArtifactId()))
+                .toList();
+
+        if (!orphans.isEmpty()) {
+            artifactRepository.deleteAll(orphans);
+        }
     }
 }

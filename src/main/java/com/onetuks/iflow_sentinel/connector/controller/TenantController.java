@@ -67,4 +67,9 @@ public class TenantController {
     public void delete(@PathVariable Long id) {
         tenantService.delete(id);
     }
+
+    @PostMapping("/{id}/sync")
+    public void sync(@PathVariable Long id) {
+        tenantService.sync(id);
+    }
 }

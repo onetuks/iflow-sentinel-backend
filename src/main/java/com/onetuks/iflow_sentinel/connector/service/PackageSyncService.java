@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /** ART-001: 테넌트의 Integration Package 목록을 OData로 조회해 DB에 upsert한다. */
 @Service
@@ -48,5 +49,16 @@ public class PackageSyncService {
             }
         }
         return result;
+    }
+
+    public void cleanOrphanPackages(Tenant tenant, Set<String> activeSapPackageIds) {
+        List<IntegrationPackage> existingPackages = packageRepository.findByTenantId(tenant.getId());
+        List<IntegrationPackage> orphans = existingPackages.stream()
+                .filter(pkg -> !activeSapPackageIds.contains(pkg.getSapPackageId()))
+                .toList();
+
+        if (!orphans.isEmpty()) {
+            packageRepository.deleteAll(orphans);
+        }
     }
 }
