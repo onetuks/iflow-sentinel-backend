@@ -55,17 +55,31 @@ public class MessageReprocessService {
     }
 
     @Transactional(readOnly = true)
-    public List<MplFailureResponse> getMplFailures(Long tenantId, Long artifactId, int top) {
+    public List<MplFailureResponse> getMplFailures(Long tenantId, String artifactIdStr, int top) {
         Tenant tenant = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 테넌트입니다. ID=" + tenantId));
         
         String sapArtifactId = null;
         String artifactName = null;
-        if (artifactId != null) {
-            Artifact artifact = artifactRepository.findById(artifactId).orElse(null);
-            if (artifact != null) {
+        Long artifactDbId = null;
+
+        if (artifactIdStr != null && !artifactIdStr.isBlank()) {
+            Optional<Artifact> optArtifact = artifactRepository.findBySapArtifactId(artifactIdStr);
+            if (optArtifact.isEmpty()) {
+                try {
+                    Long dbId = Long.parseLong(artifactIdStr);
+                    optArtifact = artifactRepository.findById(dbId);
+                } catch (NumberFormatException ignored) {}
+            }
+
+            if (optArtifact.isPresent()) {
+                Artifact artifact = optArtifact.get();
                 sapArtifactId = artifact.getSapArtifactId();
                 artifactName = artifact.getName();
+                artifactDbId = artifact.getId();
+            } else {
+                sapArtifactId = artifactIdStr;
+                artifactName = artifactIdStr;
             }
         }
 
@@ -73,18 +87,35 @@ public class MessageReprocessService {
         try {
             rawLogs = sapODataClient.getMplFailures(tenant, sapArtifactId, top);
         } catch (Exception e) {
-            log.warn("SAP OData MPL 실패 목록 조회 중 오류 발생 (Mock 데이터/빈 목록으로 우회): {}", e.getMessage());
+            log.warn("SAP OData MPL 실패 목록 조회 중 오류 발생 (빈 목록 반환): {}", e.getMessage());
             rawLogs = List.of();
         }
 
+        if (rawLogs == null) {
+            rawLogs = List.of();
+        }
+
+        // 1) 아티팩트 매핑 판별
+        if (sapArtifactId != null && !sapArtifactId.isBlank()) {
+            final String targetId = sapArtifactId;
+            rawLogs = rawLogs.stream()
+                    .filter(log -> this.isTargetArtifact(log, targetId))
+                    .toList();
+        }
+
+        // 2) Status (FAILED, ESCALATED, CANCELLED), SubStatus, CustomStatus (소문자 'fail', 'err', 'cancel' 포함) 에러 건 검증
+        rawLogs = rawLogs.stream()
+                .filter(log -> this.isErrorStatus(log.status(), log.subStatus(), log.customStatus()))
+                .toList();
+
         List<MplFailureResponse> result = new ArrayList<>();
         
-        // 저장소 정보 조회
-        Optional<StorageMappingDto> dsMapping = artifactId != null
-                ? storageMappingService.getStorageMapping(tenantId, artifactId, StorageType.DATASTORE)
+        // 저장소 정보 조회 (DB ID가 존재하는 경우 매핑 조회)
+        Optional<StorageMappingDto> dsMapping = artifactDbId != null
+                ? storageMappingService.getStorageMapping(tenantId, artifactDbId, StorageType.DATASTORE)
                 : Optional.empty();
-        Optional<StorageMappingDto> jmsMapping = artifactId != null
-                ? storageMappingService.getStorageMapping(tenantId, artifactId, StorageType.JMS)
+        Optional<StorageMappingDto> jmsMapping = artifactDbId != null
+                ? storageMappingService.getStorageMapping(tenantId, artifactDbId, StorageType.JMS)
                 : Optional.empty();
 
         String storageName = dsMapping.filter(m -> m != null && m.storageName() != null)
@@ -101,6 +132,15 @@ public class MessageReprocessService {
             
             ExpirationInfo expInfo = calculateExpiration(start, expireDays);
 
+            String errorDetail = dto.getEffectiveErrorDetail();
+            if (errorDetail == null || errorDetail.isBlank()) {
+                // $expand가 거부되는 SAP OData 501 회피를 위해 개별 평문 에러 조회 호출 (/MessageProcessingLogErrorInformations('{messageGuid}')/$value)
+                errorDetail = sapODataClient.getMplLogErrorInformation(tenant, dto.messageGuid());
+            }
+            if (errorDetail == null || errorDetail.isBlank()) {
+                errorDetail = "Status: " + dto.status() + " (No detailed error text returned by SAP IS)";
+            }
+
             result.add(new MplFailureResponse(
                     dto.messageGuid(),
                     dto.correlationId(),
@@ -112,7 +152,8 @@ public class MessageReprocessService {
                     storageName,
                     storageType,
                     expInfo.status(),
-                    expInfo.daysLeft()
+                    expInfo.daysLeft(),
+                    errorDetail
             ));
         }
 
@@ -297,6 +338,41 @@ public class MessageReprocessService {
         } else {
             return baseUrl + "/shell/monitoring/DataStores?store=" + storageName;
         }
+    }
+
+    private boolean isTargetArtifact(SapMplLogDto dto, String targetArtifactId) {
+        if (targetArtifactId == null || targetArtifactId.isBlank()) {
+            return true;
+        }
+        String art = dto.getArtifactIdOrName();
+        if (art != null) {
+            if (art.equalsIgnoreCase(targetArtifactId) || art.contains(targetArtifactId) || targetArtifactId.contains(art)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isErrorStatus(String status, String subStatus, String customStatus) {
+        if (status != null) {
+            String stUpper = status.toUpperCase();
+            if (stUpper.contains("FAIL") || stUpper.contains("ESCALAT") || stUpper.contains("CANCEL") || stUpper.contains("ERR")) {
+                return true;
+            }
+        }
+        if (subStatus != null) {
+            String subUpper = subStatus.toUpperCase();
+            if (subUpper.contains("FAIL") || subUpper.contains("ERR") || subUpper.contains("CANCEL")) {
+                return true;
+            }
+        }
+        if (customStatus != null) {
+            String csLower = customStatus.toLowerCase();
+            if (csLower.contains("fail") || csLower.contains("err") || csLower.contains("cancel")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private record ExpirationInfo(String status, Integer daysLeft) {

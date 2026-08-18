@@ -159,18 +159,79 @@ public class SapODataClient {
     }
 
     public List<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto> getMplFailures(Tenant tenant, String sapArtifactId, int top) {
-        StringBuilder relativePath = new StringBuilder("/MessageProcessingLogs?$filter=Status eq 'FAILED'");
-        if (sapArtifactId != null && !sapArtifactId.isBlank()) {
-            relativePath.append(" and IntegrationArtifact/Id eq '").append(sapArtifactId).append("'");
-        }
-        relativePath.append("&$top=").append(top > 0 ? top : 50).append("&$orderby=LogStart desc");
+        int fetchLimit = top > 0 ? Math.max(top * 3, 100) : 100;
+        
+        // 7일 전 타임스탬프 계산 (ISO-8601 OData V2 datetime 포맷)
+        java.time.LocalDateTime oneWeekAgo = java.time.LocalDateTime.now().minusDays(7);
+        String dateFilterStr = "LogStart ge datetime'" + oneWeekAgo.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")) + "'";
 
-        return getCollection(
-                tenant,
-                relativePath.toString(),
-                new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto>>() {
+        // 1차 시도: 아티팩트 ID/Name + 7일 전 타임스탬프 필터 ($expand 사용 금지: 501 에러 방지)
+        if (sapArtifactId != null && !sapArtifactId.isBlank()) {
+            try {
+                String path1 = "/MessageProcessingLogs?$filter=" + dateFilterStr + 
+                               " and (IntegrationArtifact/Id eq '" + sapArtifactId + 
+                               "' or IntegrationArtifact/Name eq '" + sapArtifactId + 
+                               "' or IntegrationFlowName eq '" + sapArtifactId + "')" +
+                               "&$top=" + fetchLimit + "&$orderby=LogStart desc";
+                List<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto> logs = getCollection(
+                        tenant, path1,
+                        new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto>>() {}
+                );
+                if (logs != null && !logs.isEmpty()) {
+                    return logs;
                 }
-        );
+            } catch (Exception e1) {
+                log.info("1차 OData 아티팩트 필터 쿼리 시도 실패 (사유: {}). 2차 전역 에러 쿼리 시도.", e1.getMessage());
+            }
+        }
+
+        // 2차 시도: 최근 7일간 실패/에러 상태 전역 필터 쿼리 (Status eq 'FAILED' or 'ESCALATED' or 'CANCELLED')
+        try {
+            String path2 = "/MessageProcessingLogs?$filter=" + dateFilterStr + 
+                           " and (Status eq 'FAILED' or Status eq 'ESCALATED' or Status eq 'CANCELLED')" +
+                           "&$top=" + fetchLimit + "&$orderby=LogStart desc";
+            List<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto> logs = getCollection(
+                    tenant, path2,
+                    new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto>>() {}
+            );
+            if (logs != null && !logs.isEmpty()) {
+                return logs;
+            }
+        } catch (Exception e2) {
+            log.info("2차 Status 필터 쿼리 시도 실패 (사유: {}). 3차 7일 전 최신 로그 쿼리 시도.", e2.getMessage());
+        }
+
+        // 3차 시도: 7일 전 최신 로그 수집 (Status 필터 오작동 시 안전선)
+        try {
+            String path3 = "/MessageProcessingLogs?$filter=" + dateFilterStr + "&$top=" + fetchLimit + "&$orderby=LogStart desc";
+            return getCollection(
+                    tenant, path3,
+                    new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto>>() {}
+            );
+        } catch (Exception e3) {
+            log.warn("3차 OData 최신 로그 수집 쿼리 시도 실패: {}", e3.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * 특정 MessageGuid에 대한 평문 에러 상세 메시지 조회 API
+     * GET /api/v1/MessageProcessingLogErrorInformations('{messageGuid}')/$value
+     */
+    public String getMplLogErrorInformation(Tenant tenant, String messageGuid) {
+        if (messageGuid == null || messageGuid.isBlank()) {
+            return null;
+        }
+        try {
+            String relativePath = "/MessageProcessingLogErrorInformations('" + messageGuid + "')/$value";
+            byte[] rawBytes = getBinary(tenant, relativePath);
+            if (rawBytes != null && rawBytes.length > 0) {
+                return new String(rawBytes, java.nio.charset.StandardCharsets.UTF_8);
+            }
+        } catch (Exception e) {
+            log.debug("MessageProcessingLogErrorInformations 평문 조회 실패 (MessageGuid={}): {}", messageGuid, e.getMessage());
+        }
+        return null;
     }
 
     private String buildUrl(String baseUrl, String relativePath) {

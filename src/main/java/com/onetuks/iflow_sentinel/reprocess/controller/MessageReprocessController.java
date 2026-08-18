@@ -44,7 +44,7 @@ public class MessageReprocessController {
     @GetMapping("/mpl-failures")
     public ResponseEntity<List<MplFailureResponse>> getMplFailures(
             @RequestParam Long tenantId,
-            @RequestParam(required = false) Long artifactId,
+            @RequestParam(required = false) String artifactId,
             @RequestParam(defaultValue = "20") int top) {
         List<MplFailureResponse> failures = messageReprocessService.getMplFailures(tenantId, artifactId, top);
         return ResponseEntity.ok(failures);

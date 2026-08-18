@@ -95,7 +95,7 @@ class MessageReprocessServiceTest {
     @Test
     @DisplayName("MPL 실패 목록을 조회하여 DTO로 반환한다 (OData 연결 오류 발생 시에도 안전한 폴백 제공)")
     void getMplFailures() {
-        List<MplFailureResponse> failures = messageReprocessService.getMplFailures(tenant.getId(), artifact.getId(), 10);
+        List<MplFailureResponse> failures = messageReprocessService.getMplFailures(tenant.getId(), String.valueOf(artifact.getId()), 10);
         assertThat(failures).isNotNull();
     }
 

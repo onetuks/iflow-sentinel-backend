@@ -13,6 +13,7 @@ public record MplFailureResponse(
         String storageName,
         String storageType,
         String expirationStatus,
-        Integer daysUntilExpiration
+        Integer daysUntilExpiration,
+        String errorDetail
 ) {
 }
