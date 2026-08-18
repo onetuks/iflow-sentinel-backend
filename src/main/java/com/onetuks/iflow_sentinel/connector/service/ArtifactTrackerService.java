@@ -1,15 +1,21 @@
 package com.onetuks.iflow_sentinel.connector.service;
 
 import com.onetuks.iflow_sentinel.connector.component.SapODataClient;
+import com.onetuks.iflow_sentinel.connector.domain.artifact.Artifact;
+import com.onetuks.iflow_sentinel.connector.domain.artifact.ArtifactRepository;
 import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
 import com.onetuks.iflow_sentinel.connector.domain.tenant.TenantRepository;
+import com.onetuks.iflow_sentinel.connector.dto.ArtifactConfigurationResponse;
 import com.onetuks.iflow_sentinel.connector.dto.ArtifactDeploymentStatus;
 import com.onetuks.iflow_sentinel.connector.dto.ODataCollectionResponse;
 import com.onetuks.iflow_sentinel.connector.dto.SapArtifactDto;
+import com.onetuks.iflow_sentinel.connector.dto.SapConfigurationDto;
 import com.onetuks.iflow_sentinel.connector.dto.SapPackageDto;
 import com.onetuks.iflow_sentinel.connector.dto.SapRuntimeArtifactDto;
 import com.onetuks.iflow_sentinel.connector.dto.TrackerArtifactResponse;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 
@@ -29,12 +35,22 @@ import java.util.Set;
 @Service
 public class ArtifactTrackerService {
 
+    private static final Logger log = LoggerFactory.getLogger(ArtifactTrackerService.class);
+
     private final TenantRepository tenantRepository;
     private final SapODataClient odataClient;
+    private final ArtifactRepository artifactRepository;
+    private final PackageDefaultValueService packageDefaultValueService;
 
-    public ArtifactTrackerService(TenantRepository tenantRepository, SapODataClient odataClient) {
+    public ArtifactTrackerService(
+            TenantRepository tenantRepository,
+            SapODataClient odataClient,
+            ArtifactRepository artifactRepository,
+            PackageDefaultValueService packageDefaultValueService) {
         this.tenantRepository = tenantRepository;
         this.odataClient = odataClient;
+        this.artifactRepository = artifactRepository;
+        this.packageDefaultValueService = packageDefaultValueService;
     }
 
     public List<TrackerArtifactResponse> list(Long tenantId) {
@@ -97,4 +113,81 @@ public class ArtifactTrackerService {
 
         return result;
     }
+
+    public List<ArtifactConfigurationResponse> getConfigurations(Long tenantId, String artifactId, String version) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new NoSuchElementException("테넌트를 찾을 수 없습니다: " + tenantId));
+
+        String reqVersion = (version == null || version.isBlank() || "-".equals(version)) ? "active" : version.trim();
+
+        // 1. OData /Configurations 로부터 Configured Value (테넌트 설정값) 조회
+        ConfigurationsFetchResult fetchResult = fetchConfigurationsWithFallback(tenant, artifactId, reqVersion);
+        List<SapConfigurationDto> odataConfigurations = fetchResult.configurations();
+        String effectiveVersion = fetchResult.effectiveVersion();
+
+        // 2. packageId 수집 (ArtifactRepository 혹은 Tracker list 기반)
+        String packageId = findPackageIdForArtifact(tenant, artifactId);
+
+        // 3. PackageDefaultValueService를 통해 DB에 저장/동기화된 Default Value 조회
+        Map<String, String> defaultValues = packageDefaultValueService.getDefaultValues(
+                tenant, packageId, artifactId, effectiveVersion);
+
+        return odataConfigurations.stream()
+                .map(dto -> {
+                    String name = dto.parameterKey() == null ? null : dto.parameterKey().trim();
+                    String configuredVal = dto.parameterValue() == null ? "-" : dto.parameterValue();
+                    String defaultVal = defaultValues.getOrDefault(name, "-");
+                    return new ArtifactConfigurationResponse(name, defaultVal, configuredVal, dto.dataType());
+                })
+                .toList();
+    }
+
+    private String findPackageIdForArtifact(Tenant tenant, String artifactId) {
+        return artifactRepository.findBySapArtifactId(artifactId)
+                .map(Artifact::getIntegrationPackage)
+                .map(pkg -> pkg.getSapPackageId())
+                .orElseGet(() -> {
+                    // DB에 없는 경우 실시간 tracker list에서 packageId 탐색
+                    try {
+                        List<TrackerArtifactResponse> trackerList = list(tenant.getId());
+                        return trackerList.stream()
+                                .filter(item -> artifactId.equals(item.artifactId()))
+                                .map(TrackerArtifactResponse::packageId)
+                                .findFirst()
+                                .orElse(null);
+                    } catch (Exception e) {
+                        log.warn("Package ID 찾기 실패 - artifactId: {}", artifactId, e);
+                        return null;
+                    }
+                });
+    }
+
+    private ConfigurationsFetchResult fetchConfigurationsWithFallback(Tenant tenant, String artifactId,
+            String reqVersion) {
+        String relativePath = String.format("/IntegrationDesigntimeArtifacts(Id='%s',Version='%s')/Configurations",
+                artifactId, reqVersion);
+        try {
+            List<SapConfigurationDto> configurations = odataClient.getCollection(
+                    tenant,
+                    relativePath,
+                    new ParameterizedTypeReference<ODataCollectionResponse<SapConfigurationDto>>() {
+                    });
+            return new ConfigurationsFetchResult(configurations, reqVersion);
+        } catch (Exception e) {
+            log.warn("OData Configurations fetch with version '{}' failed for artifact {}, fallback to 'active': {}",
+                    reqVersion, artifactId, e.getMessage());
+            String fallbackPath = String
+                    .format("/IntegrationDesigntimeArtifacts(Id='%s',Version='active')/Configurations", artifactId);
+            List<SapConfigurationDto> configurations = odataClient.getCollection(
+                    tenant,
+                    fallbackPath,
+                    new ParameterizedTypeReference<ODataCollectionResponse<SapConfigurationDto>>() {
+                    });
+            return new ConfigurationsFetchResult(configurations, "active");
+        }
+    }
+
+    private record ConfigurationsFetchResult(List<SapConfigurationDto> configurations, String effectiveVersion) {
+    }
 }
+

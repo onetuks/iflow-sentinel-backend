@@ -2,6 +2,7 @@ package com.onetuks.iflow_sentinel.connector.component;
 
 import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
 import com.onetuks.iflow_sentinel.connector.dto.ODataCollectionResponse;
+import com.onetuks.iflow_sentinel.connector.dto.ODataEntityResponse;
 import com.onetuks.iflow_sentinel.exception.ConnectorException;
 
 import org.slf4j.Logger;
@@ -56,6 +57,26 @@ public class SapODataClient {
             return response.d().results();
         } catch (RestClientResponseException e) {
             throw new ConnectorException("OData 호출 실패 (HTTP " + e.getStatusCode().value() + "): " + fullUrl,
+                    e.getStatusCode().value(), e);
+        } catch (ResourceAccessException e) {
+            throw new ConnectorException("OData 엔드포인트에 연결할 수 없습니다: " + fullUrl + " (원인: " + e.getMessage() + ")", -1, e);
+        }
+    }
+
+    public <T> T getEntity(Tenant tenant, String relativePath, ParameterizedTypeReference<ODataEntityResponse<T>> typeRef) {
+        String token = tokenProvider.getAccessToken(tenant);
+        String fullUrl = buildUrl(tenant.getOdataUrl(), relativePath);
+        log.info("[OUTBOUND SAP OData] GET (Entity) {}", fullUrl);
+        try {
+            ODataEntityResponse<T> response = restClient.get()
+                    .uri(fullUrl)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .retrieve()
+                    .body(typeRef);
+            return response == null ? null : response.d();
+        } catch (RestClientResponseException e) {
+            throw new ConnectorException("OData 단건 조회 실패 (HTTP " + e.getStatusCode().value() + "): " + fullUrl,
                     e.getStatusCode().value(), e);
         } catch (ResourceAccessException e) {
             throw new ConnectorException("OData 엔드포인트에 연결할 수 없습니다: " + fullUrl + " (원인: " + e.getMessage() + ")", -1, e);
@@ -147,7 +168,7 @@ public class SapODataClient {
             baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
         }
 
-        if (!baseUrl.contains("/api/v1")) {
+        if (relativePath != null && !relativePath.startsWith("/api/") && !baseUrl.contains("/api/v1")) {
             baseUrl = baseUrl + "/api/v1";
         }
 

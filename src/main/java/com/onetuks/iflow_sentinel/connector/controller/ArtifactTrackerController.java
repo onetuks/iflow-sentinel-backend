@@ -1,5 +1,6 @@
 package com.onetuks.iflow_sentinel.connector.controller;
 
+import com.onetuks.iflow_sentinel.connector.dto.ArtifactConfigurationResponse;
 import com.onetuks.iflow_sentinel.connector.dto.TrackerArtifactResponse;
 import com.onetuks.iflow_sentinel.connector.service.ArtifactExportService;
 import com.onetuks.iflow_sentinel.connector.service.ArtifactTrackerActionService;
@@ -65,5 +66,12 @@ public class ArtifactTrackerController {
                 .contentType(XLSX)
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"artifacts.xlsx\"")
                 .body(content);
+    }
+
+    @GetMapping("/{artifactId}/configurations")
+    public List<ArtifactConfigurationResponse> getConfigurations(@PathVariable Long tenantId,
+            @PathVariable String artifactId,
+            @RequestParam(required = false, defaultValue = "active") String version) {
+        return artifactTrackerService.getConfigurations(tenantId, artifactId, version);
     }
 }
