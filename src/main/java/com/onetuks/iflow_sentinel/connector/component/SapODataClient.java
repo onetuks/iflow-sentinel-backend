@@ -158,6 +158,21 @@ public class SapODataClient {
         }
     }
 
+    public List<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto> getMplFailures(Tenant tenant, String sapArtifactId, int top) {
+        StringBuilder relativePath = new StringBuilder("/MessageProcessingLogs?$filter=Status eq 'FAILED'");
+        if (sapArtifactId != null && !sapArtifactId.isBlank()) {
+            relativePath.append(" and IntegrationArtifact/Id eq '").append(sapArtifactId).append("'");
+        }
+        relativePath.append("&$top=").append(top > 0 ? top : 50).append("&$orderby=LogStart desc");
+
+        return getCollection(
+                tenant,
+                relativePath.toString(),
+                new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto>>() {
+                }
+        );
+    }
+
     private String buildUrl(String baseUrl, String relativePath) {
         if (baseUrl == null) {
             baseUrl = "";

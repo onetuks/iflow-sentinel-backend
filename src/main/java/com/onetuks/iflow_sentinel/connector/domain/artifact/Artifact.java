@@ -1,6 +1,7 @@
 package com.onetuks.iflow_sentinel.connector.domain.artifact;
 
 import com.onetuks.iflow_sentinel.connector.domain.integrationpackage.IntegrationPackage;
+import com.onetuks.iflow_sentinel.reprocess.domain.ReprocessSupportType;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -43,14 +44,19 @@ public class Artifact {
     @Column(nullable = false)
     private ArtifactType type;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ReprocessSupportType reprocessSupportType = ReprocessSupportType.NONE;
+
     @Builder
     public Artifact(IntegrationPackage integrationPackage, String sapArtifactId, String name, String version,
-            ArtifactType type) {
+            ArtifactType type, ReprocessSupportType reprocessSupportType) {
         this.integrationPackage = integrationPackage;
         this.sapArtifactId = sapArtifactId;
         this.name = name;
         this.version = version;
         this.type = type;
+        this.reprocessSupportType = reprocessSupportType != null ? reprocessSupportType : ReprocessSupportType.NONE;
     }
 
     public void updateFrom(IntegrationPackage integrationPackage, String name, String version, ArtifactType type) {
@@ -58,5 +64,9 @@ public class Artifact {
         this.name = name;
         this.version = version;
         this.type = type;
+    }
+
+    public void updateReprocessSupportType(ReprocessSupportType reprocessSupportType) {
+        this.reprocessSupportType = reprocessSupportType != null ? reprocessSupportType : ReprocessSupportType.NONE;
     }
 }

@@ -45,6 +45,7 @@ public class CheckRunService {
         private final ParserFacade parserFacade;
         private final RuleResolutionService ruleResolutionService;
         private final RuleEngine ruleEngine;
+        private final com.onetuks.iflow_sentinel.reprocess.service.StorageMappingService storageMappingService;
 
         public CheckRunService(
                         ProjectRepository projectRepository,
@@ -54,7 +55,8 @@ public class CheckRunService {
                         ArtifactDownloadService artifactDownloadService,
                         ParserFacade parserFacade,
                         RuleResolutionService ruleResolutionService,
-                        RuleEngine ruleEngine) {
+                        RuleEngine ruleEngine,
+                        com.onetuks.iflow_sentinel.reprocess.service.StorageMappingService storageMappingService) {
                 this.projectRepository = projectRepository;
                 this.artifactRepository = artifactRepository;
                 this.checkRunRepository = checkRunRepository;
@@ -63,6 +65,7 @@ public class CheckRunService {
                 this.parserFacade = parserFacade;
                 this.ruleResolutionService = ruleResolutionService;
                 this.ruleEngine = ruleEngine;
+                this.storageMappingService = storageMappingService;
         }
 
         public CheckRunResponse run(Long projectId, Long artifactId) {
@@ -122,6 +125,34 @@ public class CheckRunService {
         private ArtifactParsedModel downloadAndParse(Artifact artifact) {
                 byte[] zipBytes = artifactDownloadService.downloadZip(artifact);
                 ParsedModel parsedModel = parserFacade.parse(zipBytes);
+
+                if (parsedModel != null && parsedModel.iflow() != null) {
+                        com.onetuks.iflow_sentinel.reprocess.domain.ReprocessSupportType supportType =
+                                        com.onetuks.iflow_sentinel.parser.util.ReprocessSupportCalculator.calculateSupportType(parsedModel.iflow());
+                        artifact.updateReprocessSupportType(supportType);
+                        artifactRepository.save(artifact);
+
+                        Long tenantId = artifact.getIntegrationPackage() != null && artifact.getIntegrationPackage().getTenant() != null
+                                        ? artifact.getIntegrationPackage().getTenant().getId()
+                                        : null;
+
+                        if (tenantId != null) {
+                                com.onetuks.iflow_sentinel.parser.util.ReprocessSupportCalculator.extractDataStoreInfo(parsedModel.iflow())
+                                                .ifPresent(info -> storageMappingService.saveOrUpdateMapping(
+                                                                tenantId, artifact.getId(),
+                                                                com.onetuks.iflow_sentinel.reprocess.domain.StorageType.DATASTORE,
+                                                                info.name(), info.expireDays(),
+                                                                com.onetuks.iflow_sentinel.reprocess.domain.ConfidenceLevel.AUTO_PARSED));
+
+                                com.onetuks.iflow_sentinel.parser.util.ReprocessSupportCalculator.extractJmsQueueName(parsedModel.iflow())
+                                                .ifPresent(queueName -> storageMappingService.saveOrUpdateMapping(
+                                                                tenantId, artifact.getId(),
+                                                                com.onetuks.iflow_sentinel.reprocess.domain.StorageType.JMS,
+                                                                queueName, null,
+                                                                com.onetuks.iflow_sentinel.reprocess.domain.ConfidenceLevel.AUTO_PARSED));
+                        }
+                }
+
                 return new ArtifactParsedModel(artifact, parsedModel);
         }
 

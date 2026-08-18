@@ -30,7 +30,16 @@ public final class ChannelParser {
             String targetRef = XmlDom.attr(messageFlow, "targetRef");
             Map<String, String> props = IflPropertyExtractor.extract(messageFlow);
 
-            String address = firstNonBlank(props.get("urlPath"), props.get("httpAddressWithoutQuery"));
+            String address = firstNonBlank(
+                    props.get("urlPath"),
+                    props.get("httpAddressWithoutQuery"),
+                    props.get("QueueName"),
+                    props.get("queueName"),
+                    props.get("Destination"),
+                    props.get("destinationName"),
+                    props.get("Queue"),
+                    props.get("destination")
+            );
             ChannelAuth auth = new ChannelAuth(
                     props.get("senderAuthType"),
                     props.get("userRole"),
@@ -58,10 +67,15 @@ public final class ChannelParser {
         return channels;
     }
 
-    private static String firstNonBlank(String a, String b) {
-        if (a != null && !a.isBlank()) {
-            return a;
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
         }
-        return b;
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 }
