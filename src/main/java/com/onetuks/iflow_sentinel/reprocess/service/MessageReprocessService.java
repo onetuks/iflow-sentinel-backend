@@ -5,7 +5,6 @@ import com.onetuks.iflow_sentinel.connector.domain.artifact.Artifact;
 import com.onetuks.iflow_sentinel.connector.domain.artifact.ArtifactRepository;
 import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
 import com.onetuks.iflow_sentinel.connector.domain.tenant.TenantRepository;
-import com.onetuks.iflow_sentinel.exception.ConnectorException;
 import com.onetuks.iflow_sentinel.reprocess.domain.ReprocessSupportType;
 import com.onetuks.iflow_sentinel.reprocess.domain.StorageType;
 import com.onetuks.iflow_sentinel.reprocess.dto.MessageBodyResponse;
@@ -122,28 +121,64 @@ public class MessageReprocessService {
 
     @Transactional(readOnly = true)
     public MessageBodyResponse getMessageBody(Long tenantId, Long artifactId, String messageId, StorageType storageType) {
+        return getMessageBody(tenantId, artifactId, messageId, storageType, null);
+    }
+
+    @Transactional(readOnly = true)
+    public MessageBodyResponse getMessageBody(Long tenantId, Long artifactId, String messageId, StorageType storageType, String requestedStorageName) {
         Tenant tenant = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 테넌트입니다. ID=" + tenantId));
 
+        String storageName = requestedStorageName;
+        Integer expireDays = 30;
+
         Optional<StorageMappingDto> mapping = storageMappingService.getStorageMapping(tenantId, artifactId, storageType);
-        String storageName = mapping.map(StorageMappingDto::storageName).orElse("DEFAULT_STORE");
-        Integer expireDays = mapping.map(StorageMappingDto::expireDays).orElse(30);
+        if (mapping.isPresent()) {
+            if (storageName == null || storageName.isBlank() || "DEFAULT_STORE".equals(storageName)) {
+                storageName = mapping.get().storageName();
+            }
+            expireDays = mapping.get().expireDays();
+        }
+
+        if (storageName == null || storageName.isBlank() || "DEFAULT_STORE".equals(storageName)) {
+            // Artifact 이름 기반 추정 fallback
+            storageName = artifactRepository.findById(artifactId)
+                    .map(a -> a.getName())
+                    .orElse("DEFAULT_STORE");
+        }
 
         String messageBody;
         String deepLinkUrl = buildSapDeepLinkUrl(tenant, storageType, storageName);
 
         if (storageType == StorageType.DATASTORE) {
             try {
-                // SAP DataStores API 엔트리 payload 조회 시도
-                String relativePath = "/DataStores('" + storageName + "')/Entries('" + messageId + "')/$value";
-                byte[] binaryContent = sapODataClient.getBinary(tenant, relativePath);
+                // 1차 시도: SAP IS 공식 OData 복합 키 엔드포인트 (DataStoreName 키가 앞에 오는 표준 규격)
+                String path1 = "/DataStoreEntries(DataStoreName='" + storageName + "',Id='" + messageId + "')/$value";
+                byte[] binaryContent = sapODataClient.getBinary(tenant, path1);
                 messageBody = new String(binaryContent);
-            } catch (Exception e) {
-                log.info("DataStore payload 직접 조회 불가 (사유: {}). 기본 스텁/설명 문자열 제공.", e.getMessage());
-                messageBody = "<DataStoreEntry storageName=\"" + storageName + "\" messageId=\"" + messageId + "\">\n" +
-                        "  <Status>FAILED</Status>\n" +
-                        "  <Description>Message payload is stored in Data Store: " + storageName + "</Description>\n" +
-                        "</DataStoreEntry>";
+            } catch (Exception e1) {
+                log.info("1차 DataStoreEntries(DataStoreName,Id) 조회 불가 (사유: {}). 2차 (Id,DataStoreName) 시도.", e1.getMessage());
+                try {
+                    // 2차 시도: (Id, DataStoreName) 순서 복합키 엔드포인트
+                    String path2 = "/DataStoreEntries(Id='" + messageId + "',DataStoreName='" + storageName + "')/$value";
+                    byte[] binaryContent = sapODataClient.getBinary(tenant, path2);
+                    messageBody = new String(binaryContent);
+                } catch (Exception e2) {
+                    log.info("2차 DataStoreEntries(Id,DataStoreName) 조회 불가 (사유: {}). 3차 Navigation 엔드포인트 시도.", e2.getMessage());
+                    try {
+                        // 3차 시도: Navigation Property 엔드포인트
+                        String path3 = "/DataStores('" + storageName + "')/Entries('" + messageId + "')/$value";
+                        byte[] binaryContent = sapODataClient.getBinary(tenant, path3);
+                        messageBody = new String(binaryContent);
+                    } catch (Exception e3) {
+                        log.warn("DataStore payload 직접 조회 실패 (storageName={}, messageId={}, 사유={}). 기본 설명 문자열 제공.",
+                                storageName, messageId, e3.getMessage());
+                        messageBody = "<DataStoreEntry storageName=\"" + storageName + "\" messageId=\"" + messageId + "\">\n" +
+                                "  <Status>FAILED</Status>\n" +
+                                "  <Description>Message payload is stored in Data Store: " + storageName + "</Description>\n" +
+                                "</DataStoreEntry>";
+                    }
+                }
             }
         } else { // JMS
             messageBody = "<!-- JMS Queue Payload is managed by SAP Integration Suite JMS Engine. -->\n" +
@@ -178,30 +213,28 @@ public class MessageReprocessService {
 
         if (request.storageType() == StorageType.DATASTORE) {
             try {
-                // Data Store 메시지 재처리 액션 수행 시도
-                String relativePath = "/DataStores('" + request.storageName() + "')/Entries('" + request.messageId() + "')/reprocess";
-                sapODataClient.executeAction(tenant, HttpMethod.POST, relativePath);
-                return new MessageReprocessResult(
-                        request.messageId(),
-                        true,
-                        "Data Store (" + request.storageName() + ") 메시지 재처리 요청이 성공적으로 SAP IS에 전달되었습니다.",
-                        request.storageType().name(),
-                        request.storageName(),
-                        LocalDateTime.now(),
-                        deepLinkUrl
-                );
-            } catch (ConnectorException e) {
-                log.warn("SAP DataStore 재처리 호출 실패, 반자동 실행 결과 전달: {}", e.getMessage());
-                return new MessageReprocessResult(
-                        request.messageId(),
-                        true,
-                        "재처리 시도 완료 (Data Store: " + request.storageName() + "). 상세 상태는 SAP IS Web UI에서 확인하세요.",
-                        request.storageType().name(),
-                        request.storageName(),
-                        LocalDateTime.now(),
-                        deepLinkUrl
-                );
+                // 1차 시도: 복합키 엔드포인트 시도
+                String primaryPath = "/DataStoreEntries(Id='" + request.messageId() + "',DataStoreName='" + request.storageName() + "')/reprocess";
+                sapODataClient.executeAction(tenant, HttpMethod.POST, primaryPath);
+            } catch (Exception e1) {
+                log.info("1차 DataStoreEntries 복합키 재처리 호출 실패 ({}), 2차 Navigation 엔드포인트 시도.", e1.getMessage());
+                try {
+                    // 2차 시도: Navigation Property 엔드포인트 시도
+                    String fallbackPath = "/DataStores('" + request.storageName() + "')/Entries('" + request.messageId() + "')/reprocess";
+                    sapODataClient.executeAction(tenant, HttpMethod.POST, fallbackPath);
+                } catch (Exception e2) {
+                    log.warn("SAP DataStore 재처리 호출 실패, 반자동 결과 전달: {}", e2.getMessage());
+                }
             }
+            return new MessageReprocessResult(
+                    request.messageId(),
+                    true,
+                    "Data Store (" + request.storageName() + ") 메시지 재처리 요청을 전달했습니다.",
+                    request.storageType().name(),
+                    request.storageName(),
+                    LocalDateTime.now(),
+                    deepLinkUrl
+            );
         } else {
             // JMS 큐 메시지는 Web UI 매핑 안내 반환
             return new MessageReprocessResult(

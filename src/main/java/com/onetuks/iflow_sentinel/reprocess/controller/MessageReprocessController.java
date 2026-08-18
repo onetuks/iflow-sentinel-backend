@@ -55,8 +55,9 @@ public class MessageReprocessController {
             @PathVariable String messageId,
             @RequestParam Long tenantId,
             @RequestParam Long artifactId,
-            @RequestParam StorageType storageType) {
-        MessageBodyResponse response = messageReprocessService.getMessageBody(tenantId, artifactId, messageId, storageType);
+            @RequestParam StorageType storageType,
+            @RequestParam(required = false) String storageName) {
+        MessageBodyResponse response = messageReprocessService.getMessageBody(tenantId, artifactId, messageId, storageType, storageName);
         return ResponseEntity.ok(response);
     }
 

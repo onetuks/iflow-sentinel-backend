@@ -89,7 +89,7 @@ public class SapODataClient {
         log.info("[OUTBOUND SAP OData] GET (Binary) {}", fullUrl);
         try {
             byte[] body = restClient.get()
-                    .uri(fullUrl)
+                    .uri(java.net.URI.create(fullUrl))
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                     .retrieve()
                     .body(byte[].class);
@@ -98,10 +98,10 @@ public class SapODataClient {
             }
             return body;
         } catch (RestClientResponseException e) {
-            throw new ConnectorException("아티팩트 다운로드 실패 (HTTP " + e.getStatusCode().value() + "): " + fullUrl,
+            throw new ConnectorException("OData 바이너리/Payload 다운로드 실패 (HTTP " + e.getStatusCode().value() + "): " + fullUrl,
                     e.getStatusCode().value(), e);
         } catch (ResourceAccessException e) {
-            throw new ConnectorException("아티팩트 다운로드 중 연결할 수 없습니다: " + fullUrl + " (원인: " + e.getMessage() + ")", -1, e);
+            throw new ConnectorException("OData 엔드포인트에 연결할 수 없습니다: " + fullUrl + " (원인: " + e.getMessage() + ")", -1, e);
         }
     }
 
@@ -116,7 +116,7 @@ public class SapODataClient {
         log.info("[OUTBOUND SAP OData] {} {}", method, fullUrl);
         try {
             restClient.method(method)
-                    .uri(fullUrl)
+                    .uri(java.net.URI.create(fullUrl))
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                     .header("X-CSRF-Token", csrf.token())
                     .header(HttpHeaders.COOKIE, csrf.cookie())
