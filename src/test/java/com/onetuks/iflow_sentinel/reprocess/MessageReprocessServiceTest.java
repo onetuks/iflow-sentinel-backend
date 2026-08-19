@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 @Transactional
@@ -100,17 +101,24 @@ class MessageReprocessServiceTest {
     }
 
     @Test
-    @DisplayName("메시지 바디 및 보존 상태를 정상적으로 연산하여 반환한다")
-    void getMessageBody() {
+    @DisplayName("JMS 메시지 바디 및 보존 상태를 정상적으로 연산하여 반환한다")
+    void getMessageBody_jms() {
         MessageBodyResponse response = messageReprocessService.getMessageBody(
-                tenant.getId(), artifact.getId(), "MSG_12345", StorageType.DATASTORE
+                tenant.getId(), artifact.getId(), "MSG_12345", StorageType.JMS
         );
 
         assertThat(response).isNotNull();
         assertThat(response.messageId()).isEqualTo("MSG_12345");
-        assertThat(response.storageName()).isEqualTo("DS_TEST");
-        assertThat(response.expireDays()).isEqualTo(30);
-        assertThat(response.deepLinkUrl()).contains("DataStores?store=DS_TEST");
+        assertThat(response.storageName()).isEqualTo("JMS_QUEUE_TEST");
+        assertThat(response.deepLinkUrl()).contains("JmsQueues?queue=JMS_QUEUE_TEST");
+    }
+
+    @Test
+    @DisplayName("DataStore 메시지 바디 조회 시 OData 연동 실패 시 ConnectorException 예외를 던진다")
+    void getMessageBody_datastore_fail() {
+        assertThatThrownBy(() -> messageReprocessService.getMessageBody(
+                tenant.getId(), artifact.getId(), "MSG_12345", StorageType.DATASTORE
+        )).isInstanceOf(com.onetuks.iflow_sentinel.exception.ConnectorException.class);
     }
 
     @Test
