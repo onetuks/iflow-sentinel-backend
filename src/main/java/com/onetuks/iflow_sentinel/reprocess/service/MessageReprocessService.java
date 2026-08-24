@@ -42,9 +42,9 @@ public class MessageReprocessService {
     private final StorageMappingService storageMappingService;
 
     public MessageReprocessService(ArtifactRepository artifactRepository,
-                                  TenantRepository tenantRepository,
-                                  SapODataClient sapODataClient,
-                                  StorageMappingService storageMappingService) {
+            TenantRepository tenantRepository,
+            SapODataClient sapODataClient,
+            StorageMappingService storageMappingService) {
         this.artifactRepository = artifactRepository;
         this.tenantRepository = tenantRepository;
         this.sapODataClient = sapODataClient;
@@ -62,7 +62,7 @@ public class MessageReprocessService {
     public List<MplFailureResponse> getMplFailures(Long tenantId, String artifactIdStr, int top) {
         Tenant tenant = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 테넌트입니다. ID=" + tenantId));
-        
+
         String sapArtifactId = null;
         String artifactName = null;
         Long artifactDbId = null;
@@ -73,7 +73,8 @@ public class MessageReprocessService {
                 try {
                     Long dbId = Long.parseLong(artifactIdStr);
                     optArtifact = artifactRepository.findById(dbId);
-                } catch (NumberFormatException ignored) {}
+                } catch (NumberFormatException ignored) {
+                }
             }
 
             if (optArtifact.isPresent()) {
@@ -107,13 +108,14 @@ public class MessageReprocessService {
                     .toList();
         }
 
-        // 2) Status (FAILED, ESCALATED, CANCELLED), SubStatus, CustomStatus (소문자 'fail', 'err', 'cancel' 포함) 에러 건 검증
+        // 2) Status (FAILED, ESCALATED, CANCELLED), SubStatus, CustomStatus (소문자
+        // 'fail', 'err', 'cancel' 포함) 에러 건 검증
         rawLogs = rawLogs.stream()
                 .filter(log -> this.isErrorStatus(log.status(), log.subStatus(), log.customStatus()))
                 .toList();
 
         List<MplFailureResponse> result = new ArrayList<>();
-        
+
         // 저장소 정보 조회 (DB ID가 존재하는 경우 매핑 조회)
         Optional<StorageMappingDto> dsMapping = artifactDbId != null
                 ? storageMappingService.getStorageMapping(tenantId, artifactDbId, StorageType.DATASTORE)
@@ -124,7 +126,8 @@ public class MessageReprocessService {
 
         String storageName = dsMapping.filter(m -> m != null && m.storageName() != null)
                 .map(m -> m.storageName())
-                .orElseGet(() -> jmsMapping.filter(m -> m != null && m.storageName() != null).map(m -> m.storageName()).orElse("N/A"));
+                .orElseGet(() -> jmsMapping.filter(m -> m != null && m.storageName() != null).map(m -> m.storageName())
+                        .orElse("N/A"));
         String storageType = dsMapping.isPresent() ? "DATASTORE" : (jmsMapping.isPresent() ? "JMS" : "UNKNOWN");
         Integer expireDays = dsMapping.filter(m -> m != null && m.expireDays() != null)
                 .map(m -> m.expireDays())
@@ -133,12 +136,13 @@ public class MessageReprocessService {
         for (SapMplLogDto dto : rawLogs) {
             LocalDateTime start = parseODataDateTime(dto.logStart());
             LocalDateTime end = parseODataDateTime(dto.logEnd());
-            
+
             ExpirationInfo expInfo = calculateExpiration(start, expireDays);
 
             String errorDetail = dto.getEffectiveErrorDetail();
             if (errorDetail == null || errorDetail.isBlank()) {
-                // $expand가 거부되는 SAP OData 501 회피를 위해 개별 평문 에러 조회 호출 (/MessageProcessingLogErrorInformations('{messageGuid}')/$value)
+                // $expand가 거부되는 SAP OData 501 회피를 위해 개별 평문 에러 조회 호출
+                // (/MessageProcessingLogErrorInformations('{messageGuid}')/$value)
                 errorDetail = sapODataClient.getMplLogErrorInformation(tenant, dto.messageGuid());
             }
             if (errorDetail == null || errorDetail.isBlank()) {
@@ -149,9 +153,12 @@ public class MessageReprocessService {
             if (effectiveArtifactId == null || effectiveArtifactId.isBlank()) {
                 effectiveArtifactId = sapArtifactId;
             }
-            String effectiveArtifactName = (dto.integrationArtifact() != null && dto.integrationArtifact().name() != null && !dto.integrationArtifact().name().isBlank())
-                    ? dto.integrationArtifact().name()
-                    : (dto.integrationFlowName() != null && !dto.integrationFlowName().isBlank() ? dto.integrationFlowName() : artifactName);
+            String effectiveArtifactName = (dto.integrationArtifact() != null
+                    && dto.integrationArtifact().name() != null && !dto.integrationArtifact().name().isBlank())
+                            ? dto.integrationArtifact().name()
+                            : (dto.integrationFlowName() != null && !dto.integrationFlowName().isBlank()
+                                    ? dto.integrationFlowName()
+                                    : artifactName);
 
             result.add(new MplFailureResponse(
                     dto.messageGuid(),
@@ -165,27 +172,32 @@ public class MessageReprocessService {
                     storageType,
                     expInfo.status(),
                     expInfo.daysLeft(),
-                    errorDetail
-            ));
+                    errorDetail));
         }
 
         return result;
     }
 
     @Transactional(readOnly = true)
-    public MessageBodyResponse getMessageBody(Long tenantId, Long artifactId, String messageId, StorageType storageType) {
+    public MessageBodyResponse getMessageBody(Long tenantId, Long artifactId, String messageId,
+            StorageType storageType) {
         return getMessageBody(tenantId, artifactId, messageId, storageType, null);
     }
 
     @Transactional(readOnly = true)
-    public MessageBodyResponse getMessageBody(Long tenantId, Long artifactId, String messageId, StorageType storageType, String requestedStorageName) {
+    public MessageBodyResponse getMessageBody(Long tenantId, Long artifactId, String messageId, StorageType storageType,
+            String requestedStorageName) {
+        log.info("메시지 바디 조회 요청 시작 - tenantId: {}, artifactId: {}, messageId: {}, storageType: {}, requestedStorageName: {}",
+                tenantId, artifactId, messageId, storageType, requestedStorageName);
+
         Tenant tenant = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 테넌트입니다. ID=" + tenantId));
 
         String storageName = requestedStorageName;
         Integer expireDays = 30;
 
-        Optional<StorageMappingDto> mapping = storageMappingService.getStorageMapping(tenantId, artifactId, storageType);
+        Optional<StorageMappingDto> mapping = storageMappingService.getStorageMapping(tenantId, artifactId,
+                storageType);
         if (mapping.isPresent()) {
             if (storageName == null || storageName.isBlank()) {
                 storageName = mapping.get().storageName();
@@ -203,12 +215,20 @@ public class MessageReprocessService {
         String messageBody;
         String deepLinkUrl = buildSapDeepLinkUrl(tenant, storageType, storageName);
 
-        if (storageType == StorageType.DATASTORE) {
-            messageBody = fetchBinaryPayload(tenant, storageName, messageId);
-        } else { // JMS
-            messageBody = "<!-- JMS Queue Payload is managed by SAP Integration Suite JMS Engine. -->\n" +
-                    "<!-- Queue: " + storageName + " | MessageId: " + messageId + " -->\n" +
-                    "<!-- 개별 JMS 메시지 바디는 Web UI (Manage Queues)를 통해 확인하거나 모니터링 링크를 이용해주세요. -->";
+        try {
+            if (storageType == StorageType.DATASTORE) {
+                messageBody = fetchBinaryPayload(tenant, messageId);
+            } else { // JMS
+                messageBody = "<!-- JMS Queue Payload is managed by SAP Integration Suite JMS Engine. -->\n" +
+                        "<!-- Queue: " + storageName + " | MessageId: " + messageId + " -->\n" +
+                        "<!-- 개별 JMS 메시지 바디는 Web UI (Manage Queues)를 통해 확인하거나 모니터링 링크를 이용해주세요. -->";
+            }
+            log.info("메시지 바디 조회 성공 - messageId: {}, storageType: {}, storageName: {}, bodyLength: {}",
+                    messageId, storageType, storageName, messageBody != null ? messageBody.length() : 0);
+        } catch (Exception e) {
+            log.error("메시지 바디 조회 실패 - messageId: {}, storageType: {}, storageName: {}, 사유: {}",
+                    messageId, storageType, storageName, e.getMessage(), e);
+            throw e;
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -225,129 +245,53 @@ public class MessageReprocessService {
                 daysLeft,
                 isExpired,
                 now,
-                deepLinkUrl
-        );
+                deepLinkUrl);
     }
 
-    private String fetchBinaryPayload(Tenant tenant, String storageName, String messageId) {
-        byte[] binaryContent = null;
-        Exception lastException = null;
-
-        // 1차 시도: DataStoreEntries 메타데이터 컬렉션 검색으로 정확한 복합키(Id, DataStoreName, IntegrationFlow, Type) 탐색
+    /**
+     * MessageId로 DataStoreEntries에서 엔트리를 찾는다. SAP OData의 Id는 MessageId가 아니라
+     * "{IntegrationFlow}_{Timestamp}_{Sender|Receiver}_{MessageId}" 형태의 복합 문자열이므로,
+     * 정확한 복합키(Id, DataStoreName, IntegrationFlow, Type)를 얻으려면 실제 엔트리를 조회해
+     * 확인해야 한다. DataStoreEntries는 MessageId에 대한 $filter를 지원하지 않아(400 Bad
+     * Request) 페이지(__next)를 순회하며 매칭되는 항목을 찾는다.
+     */
+    private SapDataStoreEntryDto findDataStoreEntry(Tenant tenant, String messageId) {
+        log.info("DataStore 엔트리 검색 API 호출 - tenantId: {}, messageId: {}", tenant.getId(), messageId);
         try {
-            List<SapDataStoreEntryDto> entries = List.of();
-            // 1-1. MessageId 기반 필터 쿼리 시도
-            try {
-                String filterPath1 = "/DataStoreEntries?$filter=MessageId eq '" + encodeODataKey(messageId) + "'";
-                entries = sapODataClient.getCollection(tenant, filterPath1,
-                        new ParameterizedTypeReference<ODataCollectionResponse<SapDataStoreEntryDto>>() {});
-            } catch (Exception e) {
-                log.info("MessageId 필터 쿼리 실패, DataStoreName 필터 시도: {}", e.getMessage());
-            }
-
-            // 1-2. DataStoreName 기반 필터 쿼리 시도
-            if (entries.isEmpty() && storageName != null && !storageName.isBlank()) {
-                try {
-                    String filterPath2 = "/DataStoreEntries?$filter=DataStoreName eq '" + encodeODataKey(storageName) + "'";
-                    entries = sapODataClient.getCollection(tenant, filterPath2,
-                            new ParameterizedTypeReference<ODataCollectionResponse<SapDataStoreEntryDto>>() {});
-                } catch (Exception e) {
-                    log.info("DataStoreName 필터 쿼리 실패, 전체 DataStoreEntries 시도: {}", e.getMessage());
-                }
-            }
-
-            // 1-3. 전체 DataStoreEntries 시도
-            if (entries.isEmpty()) {
-                try {
-                    entries = sapODataClient.getCollection(tenant, "/DataStoreEntries",
-                            new ParameterizedTypeReference<ODataCollectionResponse<SapDataStoreEntryDto>>() {});
-                } catch (Exception e) {
-                    log.info("전체 DataStoreEntries 컬렉션 조회 실패: {}", e.getMessage());
-                }
-            }
-
-            // 검색된 엔트리 중 MessageId 또는 Id가 일치하는 엔트리 탐색
-            SapDataStoreEntryDto targetEntry = entries.stream()
-                    .filter(e -> (e.messageId() != null && e.messageId().equalsIgnoreCase(messageId))
-                            || (e.id() != null && e.id().contains(messageId)))
-                    .findFirst()
-                    .orElse(entries.isEmpty() ? null : entries.get(0));
-
-            if (targetEntry != null && targetEntry.id() != null) {
-                String rawId = targetEntry.id();
-                String rawDsName = targetEntry.dataStoreName() != null ? targetEntry.dataStoreName() : storageName;
-                String rawIFlow = targetEntry.integrationFlow() != null ? targetEntry.integrationFlow() : "";
-                String rawType = targetEntry.type() != null ? targetEntry.type() : "";
-
-                String binaryPath = "/DataStoreEntries(Id='" + encodeODataKey(rawId) +
-                        "',DataStoreName='" + encodeODataKey(rawDsName) +
-                        "',IntegrationFlow='" + encodeODataKey(rawIFlow) +
-                        "',Type='" + encodeODataKey(rawType) + "')/$value";
-                binaryContent = sapODataClient.getBinary(tenant, binaryPath);
-            }
+            SapDataStoreEntryDto entry = sapODataClient.findInCollection(tenant, "/DataStoreEntries",
+                    new ParameterizedTypeReference<ODataCollectionResponse<SapDataStoreEntryDto>>() {
+                    },
+                    e -> messageId.equalsIgnoreCase(e.messageId()))
+                    .orElseThrow(() -> {
+                        log.warn("DataStore 엔트리 검색 실패 - MessageId={} 에 해당하는 엔트리가 없습니다.", messageId);
+                        return new ConnectorException(
+                                "DataStore에서 MessageId=" + messageId + "에 해당하는 엔트리를 찾을 수 없습니다.", 404);
+                    });
+            log.info("DataStore 엔트리 검색 성공 - messageId: {}, found entry Id: {}, DataStoreName: {}, IntegrationFlow: {}",
+                    messageId, entry.id(), entry.dataStoreName(), entry.integrationFlow());
+            return entry;
         } catch (Exception e) {
-            log.info("DataStoreEntries 메타데이터 검색 기반 바이너리 다운로드 실패: {}", e.getMessage());
-            lastException = e;
+            log.error("DataStore 엔트리 검색 API 예외 발생 - messageId: {}, 사유: {}", messageId, e.getMessage(), e);
+            throw e;
         }
+    }
 
-        // 2차 시도: 직접 생성한 4개 복합키 (IntegrationFlow='', Type='')
-        if (binaryContent == null) {
-            try {
-                String path1 = "/DataStoreEntries(DataStoreName='" + encodeODataKey(storageName) +
-                        "',Id='" + encodeODataKey(messageId) + "',IntegrationFlow='',Type='')/$value";
-                binaryContent = sapODataClient.getBinary(tenant, path1);
-            } catch (Exception e) {
-                log.info("2차 직접 생성 4개 복합키(IntegrationFlow='',Type='') 실패: {}", e.getMessage());
-                lastException = e;
-            }
-        }
+    private String buildEntryKeyPath(SapDataStoreEntryDto entry) {
+        return "/DataStoreEntries(Id='" + encodeODataKey(entry.id()) +
+                "',DataStoreName='" + encodeODataKey(entry.dataStoreName()) +
+                "',IntegrationFlow='" + encodeODataKey(entry.integrationFlow()) +
+                "',Type='" + encodeODataKey(entry.type()) + "')";
+    }
 
-        // 3차 시도: DataStores Navigation Property 엔드포인트
-        if (binaryContent == null) {
-            try {
-                String path2 = "/DataStores(DataStoreName='" + encodeODataKey(storageName) +
-                        "',IntegrationFlow='',Type='')/Entries('" + encodeODataKey(messageId) + "')/$value";
-                binaryContent = sapODataClient.getBinary(tenant, path2);
-            } catch (Exception e) {
-                log.info("3차 DataStores Navigation 실패: {}", e.getMessage());
-                lastException = e;
-            }
-        }
-
-        // 4차 시도: IntegrationFlow=storageName 4개 복합키
-        if (binaryContent == null) {
-            try {
-                String path3 = "/DataStoreEntries(DataStoreName='" + encodeODataKey(storageName) +
-                        "',Id='" + encodeODataKey(messageId) + "',IntegrationFlow='" + encodeODataKey(storageName) + "',Type='')/$value";
-                binaryContent = sapODataClient.getBinary(tenant, path3);
-            } catch (Exception e) {
-                log.info("4차 IntegrationFlow=storageName 4개 복합키 실패: {}", e.getMessage());
-                lastException = e;
-            }
-        }
-
-        // 5차 시도: 레거시 2개 복합키 fallback
-        if (binaryContent == null) {
-            try {
-                String path4 = "/DataStoreEntries(DataStoreName='" + encodeODataKey(storageName) +
-                        "',Id='" + encodeODataKey(messageId) + "')/$value";
-                binaryContent = sapODataClient.getBinary(tenant, path4);
-            } catch (Exception e) {
-                log.info("5차 레거시 2개 복합키 실패: {}", e.getMessage());
-                lastException = e;
-            }
-        }
-
-        if (binaryContent == null || binaryContent.length == 0) {
-            log.warn("DataStore payload 직접 조회 실패 (storageName={}, messageId={}). 예외 전파.", storageName, messageId);
-            if (lastException instanceof ConnectorException ce) {
-                throw ce;
-            }
-            throw new ConnectorException("DataStore payload 직접 조회 실패 (storageName=" + storageName + ", messageId=" + messageId + ")",
-                    500, lastException);
-        }
-
-        return extractPayloadFromBinary(binaryContent);
+    private String fetchBinaryPayload(Tenant tenant, String messageId) {
+        log.info("DataStore 바이너리 Payload 페치 과정 시작 - messageId: {}", messageId);
+        SapDataStoreEntryDto entry = findDataStoreEntry(tenant, messageId);
+        String keyPath = buildEntryKeyPath(entry) + "/$value";
+        log.info("DataStore 바이너리 Payload API 호출 - keyPath: {}", keyPath);
+        byte[] binaryContent = sapODataClient.getBinary(tenant, keyPath);
+        String extracted = extractPayloadFromBinary(binaryContent);
+        log.info("DataStore 바이너리 Payload 추출 완료 - messageId: {}, length: {}", messageId, extracted.length());
+        return extracted;
     }
 
     private String encodeODataKey(String value) {
@@ -361,14 +305,17 @@ public class MessageReprocessService {
 
     private String extractPayloadFromBinary(byte[] binaryContent) {
         if (binaryContent == null || binaryContent.length == 0) {
+            log.warn("추출할 바이너리 Content가 비어있습니다 (0 bytes).");
             return "";
         }
+        log.info("바이너리 Content 변환/압축해제 시도 - rawBinaryBytes: {} bytes", binaryContent.length);
         // ZIP 파일 매직 넘버 확인 (PK\003\004)
         if (binaryContent.length >= 4 &&
                 binaryContent[0] == 0x50 && binaryContent[1] == 0x4B &&
                 binaryContent[2] == 0x03 && binaryContent[3] == 0x04) {
+            log.info("바이너리 Content가 ZIP 포맷입니다. ZipInputStream으로 압축 해제를 진행합니다.");
             try (java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(binaryContent);
-                 java.util.zip.ZipInputStream zis = new java.util.zip.ZipInputStream(bais)) {
+                    java.util.zip.ZipInputStream zis = new java.util.zip.ZipInputStream(bais)) {
 
                 java.util.zip.ZipEntry zipEntry;
                 byte[] bodyBytes = null;
@@ -380,8 +327,10 @@ public class MessageReprocessService {
                     }
                     byte[] content = zis.readAllBytes();
                     String name = zipEntry.getName().toLowerCase();
+                    log.debug("Zip 내부 파일 확인 - name: {}, size: {} bytes", zipEntry.getName(), content.length);
                     if (name.contains("body") || name.contains("payload") || name.contains("message")) {
                         bodyBytes = content;
+                        log.info("Zip 본문 타겟 엔트리 감지: {}", zipEntry.getName());
                         break;
                     }
                     if (firstFileBytes == null) {
@@ -390,10 +339,11 @@ public class MessageReprocessService {
                 }
                 byte[] targetBytes = bodyBytes != null ? bodyBytes : firstFileBytes;
                 if (targetBytes != null) {
+                    log.info("Zip 텍스트 추출 완료 - extractedSize: {} bytes", targetBytes.length);
                     return new String(targetBytes, java.nio.charset.StandardCharsets.UTF_8);
                 }
             } catch (Exception e) {
-                log.warn("Zip 파일 압축 해제 실패, 원본 바이너리를 텍스트로 변환합니다: {}", e.getMessage());
+                log.warn("Zip 파일 압축 해제 실패, 원본 바이너리를 텍스트로 직접 변환합니다: {}", e.getMessage(), e);
             }
         }
         return new String(binaryContent, java.nio.charset.StandardCharsets.UTF_8);
@@ -407,7 +357,7 @@ public class MessageReprocessService {
         String deepLinkUrl = buildSapDeepLinkUrl(tenant, request.storageType(), request.storageName());
 
         if (request.storageType() == StorageType.DATASTORE) {
-            executeDataStoreReprocess(tenant, request.storageName(), request.messageId());
+            executeDataStoreReprocess(tenant, request.messageId());
             return new MessageReprocessResult(
                     request.messageId(),
                     true,
@@ -415,8 +365,7 @@ public class MessageReprocessService {
                     request.storageType().name(),
                     request.storageName(),
                     LocalDateTime.now(),
-                    deepLinkUrl
-            );
+                    deepLinkUrl);
         } else {
             // JMS 큐 메시지는 Web UI 매핑 안내 반환
             return new MessageReprocessResult(
@@ -426,38 +375,13 @@ public class MessageReprocessService {
                     request.storageType().name(),
                     request.storageName(),
                     LocalDateTime.now(),
-                    deepLinkUrl
-            );
+                    deepLinkUrl);
         }
     }
 
-    private void executeDataStoreReprocess(Tenant tenant, String storageName, String messageId) {
-        // 1차 시도: 4개 복합키 (IntegrationFlow='', Type='')
-        try {
-            String path1 = "/DataStoreEntries(Id='" + messageId + "',DataStoreName='" + storageName + "',IntegrationFlow='',Type='')/reprocess";
-            sapODataClient.executeAction(tenant, HttpMethod.POST, path1);
-            return;
-        } catch (Exception e1) {
-            log.info("1차 DataStoreEntries 4개 복합키 재처리 실패 (사유: {}). 2차 DataStores Navigation 시도.", e1.getMessage());
-        }
-
-        // 2차 시도: DataStores Navigation Property (DataStoreName, IntegrationFlow='', Type='')
-        try {
-            String path2 = "/DataStores(DataStoreName='" + storageName + "',IntegrationFlow='',Type='')/Entries('" + messageId + "')/reprocess";
-            sapODataClient.executeAction(tenant, HttpMethod.POST, path2);
-            return;
-        } catch (Exception e2) {
-            log.info("2차 DataStores Navigation 재처리 실패 (사유: {}). 3차 레거시 2개 복합키 시도.", e2.getMessage());
-        }
-
-        // 3차 시도: 레거시 2개 복합키
-        try {
-            String path3 = "/DataStoreEntries(Id='" + messageId + "',DataStoreName='" + storageName + "')/reprocess";
-            sapODataClient.executeAction(tenant, HttpMethod.POST, path3);
-        } catch (Exception e3) {
-            log.warn("SAP DataStore 재처리 모든 엔드포인트 호출 실패 (storageName={}, messageId={}, 최종 사유={}).",
-                    storageName, messageId, e3.getMessage());
-        }
+    private void executeDataStoreReprocess(Tenant tenant, String messageId) {
+        SapDataStoreEntryDto entry = findDataStoreEntry(tenant, messageId);
+        sapODataClient.executeAction(tenant, HttpMethod.POST, buildEntryKeyPath(entry) + "/reprocess");
     }
 
     private ExpirationInfo calculateExpiration(LocalDateTime logStart, Integer expireDays) {
@@ -466,7 +390,7 @@ public class MessageReprocessService {
         }
         long daysPassed = Duration.between(logStart, LocalDateTime.now()).toDays();
         long daysLeft = expireDays - daysPassed;
-        
+
         if (daysLeft <= 0) {
             return new ExpirationInfo("EXPIRED", 0);
         } else if (daysLeft <= 3) {
@@ -499,7 +423,8 @@ public class MessageReprocessService {
     }
 
     private String buildSapDeepLinkUrl(Tenant tenant, StorageType storageType, String storageName) {
-        String baseUrl = tenant.getOdataUrl() != null ? tenant.getOdataUrl() : "https://sap-integration-suite.cfapps.sap";
+        String baseUrl = tenant.getOdataUrl() != null ? tenant.getOdataUrl()
+                : "https://sap-integration-suite.cfapps.sap";
         if (baseUrl.contains("/api/v1")) {
             baseUrl = baseUrl.replace("/api/v1", "");
         }
@@ -516,7 +441,8 @@ public class MessageReprocessService {
         }
         String art = dto.getArtifactIdOrName();
         if (art != null) {
-            if (art.equalsIgnoreCase(targetArtifactId) || art.contains(targetArtifactId) || targetArtifactId.contains(art)) {
+            if (art.equalsIgnoreCase(targetArtifactId) || art.contains(targetArtifactId)
+                    || targetArtifactId.contains(art)) {
                 return true;
             }
         }
@@ -526,7 +452,8 @@ public class MessageReprocessService {
     private boolean isErrorStatus(String status, String subStatus, String customStatus) {
         if (status != null) {
             String stUpper = status.toUpperCase();
-            if (stUpper.contains("FAIL") || stUpper.contains("ESCALAT") || stUpper.contains("CANCEL") || stUpper.contains("ERR")) {
+            if (stUpper.contains("FAIL") || stUpper.contains("ESCALAT") || stUpper.contains("CANCEL")
+                    || stUpper.contains("ERR")) {
                 return true;
             }
         }

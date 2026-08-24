@@ -30,6 +30,7 @@ import java.util.stream.Collectors;
 public class SapODataClient {
 
     private static final Logger log = LoggerFactory.getLogger(SapODataClient.class);
+    private static final int MAX_PAGINATION_PAGES = 200;
 
     private final OAuth2TokenProvider tokenProvider;
     private final RestClient restClient;
@@ -63,6 +64,61 @@ public class SapODataClient {
         }
     }
 
+    /**
+     * SAP OData 컬렉션이 {@code __next}로 페이지네이션되어 있을 때, 페이지를 순회하며 predicate에
+     * 일치하는 첫 엔트리를 찾는다. DataStoreEntries처럼 {@code $filter}가 지원되지 않는 프로퍼티로
+     * 검색해야 할 때 사용한다. 일치 항목을 찾으면 즉시 반환하고 더 이상 페이지를 조회하지 않는다.
+     */
+    public <T> java.util.Optional<T> findInCollection(Tenant tenant, String relativePath,
+            ParameterizedTypeReference<ODataCollectionResponse<T>> typeRef, java.util.function.Predicate<T> predicate) {
+        String token = tokenProvider.getAccessToken(tenant);
+        String url = buildUrl(tenant.getOdataUrl(), relativePath);
+        int pagesFetched = 0;
+        while (url != null && pagesFetched < MAX_PAGINATION_PAGES) {
+            pagesFetched++;
+            log.info("[OUTBOUND SAP OData] GET (Paginated, page {}) {}", pagesFetched, url);
+            ODataCollectionResponse<T> response;
+            try {
+                response = restClient.get()
+                        .uri(java.net.URI.create(url))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .accept(MediaType.APPLICATION_JSON)
+                        .retrieve()
+                        .body(typeRef);
+            } catch (RestClientResponseException e) {
+                log.error("[OUTBOUND SAP OData] GET (Paginated, page {}) 실패 - HTTP Status: {}, URL: {}, ResponseBody: {}",
+                        pagesFetched, e.getStatusCode().value(), url, e.getResponseBodyAsString(), e);
+                throw new ConnectorException("OData 호출 실패 (HTTP " + e.getStatusCode().value() + "): " + url,
+                        e.getStatusCode().value(), e);
+            } catch (ResourceAccessException e) {
+                log.error("[OUTBOUND SAP OData] GET (Paginated, page {}) 연결 실패 - URL: {}, Message: {}",
+                        pagesFetched, url, e.getMessage(), e);
+                throw new ConnectorException("OData 엔드포인트에 연결할 수 없습니다: " + url + " (원인: " + e.getMessage() + ")", -1, e);
+            } catch (Exception e) {
+                log.error("[OUTBOUND SAP OData] GET (Paginated, page {}) 예외 발생 - URL: {}, Message: {}",
+                        pagesFetched, url, e.getMessage(), e);
+                throw e;
+            }
+            if (response == null || response.d() == null) {
+                log.warn("[OUTBOUND SAP OData] GET (Paginated, page {}) 응답 또는 d 데이터가 null입니다.", pagesFetched);
+                return java.util.Optional.empty();
+            }
+            List<T> results = response.d().results() != null ? response.d().results() : List.of();
+            log.info("[OUTBOUND SAP OData] GET (Paginated, page {}) 수신 건수: {}건", pagesFetched, results.size());
+            java.util.Optional<T> match = results.stream().filter(predicate).findFirst();
+            if (match.isPresent()) {
+                log.info("[OUTBOUND SAP OData] GET (Paginated) 조건 매칭 성공 - 페이지 {}", pagesFetched);
+                return match;
+            }
+            String next = response.d().next();
+            url = (next == null || next.startsWith("http://") || next.startsWith("https://"))
+                    ? next
+                    : buildUrl(tenant.getOdataUrl(), next);
+        }
+        log.warn("[OUTBOUND SAP OData] GET (Paginated) 총 {}페이지 검색 완료 후 조건 일치 항목을 찾지 못함", pagesFetched);
+        return java.util.Optional.empty();
+    }
+
     public <T> T getEntity(Tenant tenant, String relativePath, ParameterizedTypeReference<ODataEntityResponse<T>> typeRef) {
         String token = tokenProvider.getAccessToken(tenant);
         String fullUrl = buildUrl(tenant.getOdataUrl(), relativePath);
@@ -76,10 +132,16 @@ public class SapODataClient {
                     .body(typeRef);
             return response == null ? null : response.d();
         } catch (RestClientResponseException e) {
+            log.error("[OUTBOUND SAP OData] GET (Entity) 실패 - HTTP Status: {}, URL: {}, ResponseBody: {}",
+                    e.getStatusCode().value(), fullUrl, e.getResponseBodyAsString(), e);
             throw new ConnectorException("OData 단건 조회 실패 (HTTP " + e.getStatusCode().value() + "): " + fullUrl,
                     e.getStatusCode().value(), e);
         } catch (ResourceAccessException e) {
+            log.error("[OUTBOUND SAP OData] GET (Entity) 연결 실패 - URL: {}, Message: {}", fullUrl, e.getMessage(), e);
             throw new ConnectorException("OData 엔드포인트에 연결할 수 없습니다: " + fullUrl + " (원인: " + e.getMessage() + ")", -1, e);
+        } catch (Exception e) {
+            log.error("[OUTBOUND SAP OData] GET (Entity) 예외 발생 - URL: {}, Message: {}", fullUrl, e.getMessage(), e);
+            throw e;
         }
     }
 
@@ -94,14 +156,22 @@ public class SapODataClient {
                     .retrieve()
                     .body(byte[].class);
             if (body == null) {
+                log.warn("[OUTBOUND SAP OData] GET (Binary) 빈 응답 수신 - URL: {}", fullUrl);
                 throw new ConnectorException("빈 응답을 받았습니다: " + fullUrl, 200);
             }
+            log.info("[OUTBOUND SAP OData] GET (Binary) 성공 - URL: {}, 수신 바이트: {} bytes", fullUrl, body.length);
             return body;
         } catch (RestClientResponseException e) {
+            log.error("[OUTBOUND SAP OData] GET (Binary) 실패 - HTTP Status: {}, URL: {}, ResponseBody: {}",
+                    e.getStatusCode().value(), fullUrl, e.getResponseBodyAsString(), e);
             throw new ConnectorException("OData 바이너리/Payload 다운로드 실패 (HTTP " + e.getStatusCode().value() + "): " + fullUrl,
                     e.getStatusCode().value(), e);
         } catch (ResourceAccessException e) {
+            log.error("[OUTBOUND SAP OData] GET (Binary) 연결 실패 - URL: {}, Message: {}", fullUrl, e.getMessage(), e);
             throw new ConnectorException("OData 엔드포인트에 연결할 수 없습니다: " + fullUrl + " (원인: " + e.getMessage() + ")", -1, e);
+        } catch (Exception e) {
+            log.error("[OUTBOUND SAP OData] GET (Binary) 예외 발생 - URL: {}, Message: {}", fullUrl, e.getMessage(), e);
+            throw e;
         }
     }
 
