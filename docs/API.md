@@ -125,11 +125,16 @@ Request Body (`TenantRequest`)
   "platformType": "NEO | CLOUD_FOUNDRY",
   "authType": "OAUTH2_CLIENT_CREDENTIALS",
   "clientId": "string",
-  "clientSecret": "string"
+  "clientSecret": "string",
+  "interfaceUrl": "string (선택: iFlow 런타임 호출 기본 URL, 예: https://<subaccount>-rt.cfapps...)",
+  "interfaceTokenUrl": "string (선택: iFlow 런타임 호출 전용 OAuth2 토큰 발급 URL)",
+  "interfaceAuthType": "BASIC | OAUTH2_CLIENT_CREDENTIALS (선택: 기본 BASIC)",
+  "interfaceUsername": "string (선택: iFlow 호출용 사용자명 또는 Client ID)",
+  "interfacePassword": "string (선택: iFlow 호출용 비밀번호 또는 Client Secret)"
 }
 ```
 
-Response (`TenantResponse`) — `clientSecret`은 응답에 포함되지 않음
+Response (`TenantResponse`) — `clientSecret` 및 `interfacePassword`는 응답에 포함되지 않음
 ```json
 {
   "id": 1,
@@ -139,7 +144,13 @@ Response (`TenantResponse`) — `clientSecret`은 응답에 포함되지 않음
   "tokenUrl": "string",
   "platformType": "NEO",
   "authType": "OAUTH2_CLIENT_CREDENTIALS",
-  "clientId": "string"
+  "clientId": "string",
+  "interfaceUrl": "string",
+  "interfaceTokenUrl": "string",
+  "interfaceAuthType": "BASIC",
+  "interfaceUsername": "string",
+  "status": "connected",
+  "packageCount": 0
 }
 ```
 
@@ -417,3 +428,214 @@ Response (`ParsedModel`) — 개요만 표기 (세부 구조는 `parser/model` �
 ```
 
 Error: 파싱 실패 시 `422 Unprocessable Entity` + `ErrorResponse`
+
+---
+
+## 10. Reprocess API
+
+`MessageReprocessController` — `/api/reprocess`
+
+SAP IS 메시지 재처리(DataStore/JMS), 메시지 바디 조회, 실패 로그(MPL) 조회 및 재실행 히스토리 관리.
+
+### 아티팩트 재처리 지원 유형 조회
+`GET /api/reprocess/artifacts/{artifactId}/support-type`
+
+Response: `ReprocessSupportType` (`DATASTORE_ONLY` | `JMS_ONLY` | `BOTH` | `NONE`)
+
+---
+
+### MPL 실패 로그 목록 조회
+`GET /api/reprocess/mpl-failures?tenantId={tenantId}&artifactId={artifactId}&top={top}`
+
+- `tenantId`: 필수 (Long)
+- `artifactId`: 선택 (String, SAP Artifact ID 또는 DB ID)
+- `top`: 선택 (기본값: 20)
+
+Response (`MplFailureResponse[]`):
+```json
+[
+  {
+    "messageGuid": "string",
+    "correlationId": "string",
+    "status": "FAILED | ESCALATED | CANCELLED",
+    "artifactId": "string",
+    "artifactName": "string",
+    "logStart": "2026-08-24T10:00:00",
+    "logEnd": "2026-08-24T10:01:00",
+    "storageName": "string",
+    "storageType": "DATASTORE | JMS | UNKNOWN",
+    "expirationStatus": "NORMAL | WARNING_EXPIRING_SOON | EXPIRED",
+    "daysLeft": 28,
+    "errorDetail": "string"
+  }
+]
+```
+
+---
+
+### 메시지 바디 조회
+`GET /api/reprocess/messages/{messageId}/body?tenantId={tenantId}&artifactId={artifactId}&storageType={storageType}&storageName={storageName}`
+
+- `tenantId`: 필수 (Long)
+- `artifactId`: 필수 (Long)
+- `storageType`: 필수 (`DATASTORE` | `JMS`)
+- `storageName`: 선택 (String)
+
+Response (`MessageBodyResponse`):
+```json
+{
+  "messageId": "string",
+  "storageType": "DATASTORE | JMS",
+  "storageName": "string",
+  "messageBody": "string",
+  "expireDays": 30,
+  "daysLeft": 28,
+  "isExpired": false,
+  "fetchedAt": "2026-08-24T10:00:00",
+  "deepLinkUrl": "string"
+}
+```
+
+---
+
+### 메시지 재처리 실행
+`POST /api/reprocess/execute`
+
+Request Body (`MessageReprocessRequest`):
+```json
+{
+  "tenantId": 1,
+  "artifactId": "string (sapArtifactId)",
+  "messageId": "string",
+  "storageType": "DATASTORE | JMS",
+  "storageName": "string",
+  "reprocessedBy": "ADMIN",
+  "payload": "string (선택: 미입력 시 DataStore에서 원본 바이너리 바디 자동 추출)",
+  "endpointUrl": "string (선택: 미입력 시 SAP ServiceEndpoints 또는 기본 런타임 URL 자동 탐색)"
+}
+```
+
+Response (`MessageReprocessResult`):
+```json
+{
+  "historyId": 1,
+  "messageId": "string",
+  "success": true,
+  "statusMessage": "string",
+  "storageType": "DATASTORE | JMS",
+  "storageName": "string",
+  "reprocessedAt": "2026-08-24T10:00:00",
+  "deepLinkUrl": "string",
+  "endpointUrl": "string",
+  "httpStatusCode": 200
+}
+```
+
+---
+
+### 재처리 히스토리 목록 조회
+`GET /api/reprocess/histories?tenantId={tenantId}&artifactId={artifactId}&messageId={messageId}&status={status}`
+
+- 모든 파라미터 선택적 (지정된 조건에 대해 AND 검색 및 최신순 정렬)
+- `status`: `SUCCESS` | `FAILED` | `PENDING`
+
+Response (`ReprocessHistoryResponse[]`):
+```json
+[
+  {
+    "id": 1,
+    "tenantId": 1,
+    "tenantName": "string",
+    "artifactId": "string",
+    "artifactName": "string",
+    "messageId": "string",
+    "storageType": "DATASTORE | JMS",
+    "storageName": "string",
+    "status": "SUCCESS | FAILED | PENDING",
+    "statusMessage": "string",
+    "reprocessedAt": "2026-08-24T10:00:00",
+    "reprocessedBy": "ADMIN",
+    "deepLinkUrl": "string",
+    "endpointUrl": "string",
+    "httpStatusCode": 200
+  }
+]
+```
+
+---
+
+### 재처리 히스토리 단건 조회
+`GET /api/reprocess/histories/{id}`
+
+Response (`ReprocessHistoryResponse`):
+```json
+{
+  "id": 1,
+  "tenantId": 1,
+  "tenantName": "string",
+  "artifactId": "string",
+  "artifactName": "string",
+  "messageId": "string",
+  "storageType": "DATASTORE | JMS",
+  "storageName": "string",
+  "status": "SUCCESS",
+  "statusMessage": "string",
+  "reprocessedAt": "2026-08-24T10:00:00",
+  "reprocessedBy": "ADMIN",
+  "deepLinkUrl": "string",
+  "endpointUrl": "string",
+  "httpStatusCode": 200
+}
+```
+
+---
+
+### 재처리 히스토리 삭제
+`DELETE /api/reprocess/histories/{id}`
+
+Response: 없음 (204 No Content)
+
+---
+
+### 저장소 매핑 목록 조회
+`GET /api/reprocess/storage-mappings?tenantId={tenantId}&artifactId={artifactId}`
+
+Response (`StorageMappingDto[]`):
+```json
+[
+  {
+    "tenantId": 1,
+    "artifactId": 1,
+    "storageType": "DATASTORE | JMS",
+    "storageName": "string",
+    "expireDays": 30,
+    "confidenceLevel": "AUTO_PARSED | MANUAL_INPUT",
+    "updatedAt": "2026-08-24T10:00:00"
+  }
+]
+```
+
+---
+
+### 저장소 매핑 수동 저장/수정
+`PUT /api/reprocess/storage-mappings`
+
+Request Body (`StorageMappingDto`):
+```json
+{
+  "tenantId": 1,
+  "artifactId": 1,
+  "storageType": "DATASTORE | JMS",
+  "storageName": "string",
+  "expireDays": 30
+}
+```
+
+Response: `StorageMappingDto`
+
+---
+
+### 저장소 매핑 삭제
+`DELETE /api/reprocess/storage-mappings?tenantId={tenantId}&artifactId={artifactId}`
+
+Response: 없음 (204 No Content)

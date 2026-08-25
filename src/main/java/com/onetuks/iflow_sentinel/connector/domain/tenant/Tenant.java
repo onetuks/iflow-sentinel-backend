@@ -55,6 +55,23 @@ public class Tenant {
     @Column(nullable = false)
     private String clientSecret;
 
+    @Column(name = "interface_url")
+    private String interfaceUrl;
+
+    @Column(name = "interface_token_url")
+    private String interfaceTokenUrl;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "interface_auth_type")
+    private TenantAuthType interfaceAuthType;
+
+    @Column(name = "interface_username")
+    private String interfaceUsername;
+
+    @Convert(converter = CredentialConverter.class)
+    @Column(name = "interface_password")
+    private String interfacePassword;
+
     @Builder
     public Tenant(
             Project project,
@@ -64,7 +81,12 @@ public class Tenant {
             TenantPlatform platformType,
             TenantAuthType authType,
             String clientId,
-            String clientSecret) {
+            String clientSecret,
+            String interfaceUrl,
+            String interfaceTokenUrl,
+            TenantAuthType interfaceAuthType,
+            String interfaceUsername,
+            String interfacePassword) {
         this.project = project;
         this.name = name;
         this.odataUrl = odataUrl;
@@ -73,6 +95,11 @@ public class Tenant {
         this.authType = authType;
         this.clientId = clientId;
         this.clientSecret = clientSecret;
+        this.interfaceUrl = interfaceUrl;
+        this.interfaceTokenUrl = interfaceTokenUrl;
+        this.interfaceAuthType = interfaceAuthType != null ? interfaceAuthType : TenantAuthType.BASIC;
+        this.interfaceUsername = interfaceUsername;
+        this.interfacePassword = interfacePassword;
     }
 
     public void update(
@@ -82,7 +109,12 @@ public class Tenant {
             TenantPlatform platformType,
             TenantAuthType authType,
             String clientId,
-            String clientSecret) {
+            String clientSecret,
+            String interfaceUrl,
+            String interfaceTokenUrl,
+            TenantAuthType interfaceAuthType,
+            String interfaceUsername,
+            String interfacePassword) {
         this.name = name;
         this.odataUrl = odataUrl;
         this.tokenUrl = tokenUrl;
@@ -90,5 +122,10 @@ public class Tenant {
         this.authType = authType;
         this.clientId = clientId;
         this.clientSecret = clientSecret;
+        this.interfaceUrl = interfaceUrl;
+        this.interfaceTokenUrl = interfaceTokenUrl;
+        this.interfaceAuthType = interfaceAuthType != null ? interfaceAuthType : TenantAuthType.BASIC;
+        this.interfaceUsername = interfaceUsername;
+        this.interfacePassword = interfacePassword;
     }
 }

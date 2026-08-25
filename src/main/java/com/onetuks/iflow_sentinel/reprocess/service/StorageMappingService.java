@@ -21,27 +21,27 @@ public class StorageMappingService {
     }
 
     @Transactional(readOnly = true)
-    public List<StorageMappingDto> getStorageMappings(Long tenantId, Long artifactId) {
+    public List<StorageMappingDto> getStorageMappings(Long tenantId, String artifactId) {
         return storageMappingRepository.findByTenantIdAndArtifactId(tenantId, artifactId).stream()
                 .map(StorageMappingDto::from)
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public Optional<StorageMappingDto> getStorageMapping(Long tenantId, Long artifactId, StorageType storageType) {
+    public Optional<StorageMappingDto> getStorageMapping(Long tenantId, String artifactId, StorageType storageType) {
         return storageMappingRepository.findByTenantIdAndArtifactIdAndStorageType(tenantId, artifactId, storageType)
                 .map(StorageMappingDto::from);
     }
 
     @Transactional
-    public StorageMappingDto saveOrUpdateManualMapping(Long tenantId, Long artifactId, StorageType storageType,
+    public StorageMappingDto saveOrUpdateManualMapping(Long tenantId, String artifactId, StorageType storageType,
                                                        String storageName, Integer expireDays) {
         return saveOrUpdateMapping(tenantId, artifactId, storageType, storageName, expireDays, ConfidenceLevel.MANUAL);
     }
 
     @Transactional
-    public StorageMappingDto saveOrUpdateMapping(Long tenantId, Long artifactId, StorageType storageType,
-                                                       String storageName, Integer expireDays, ConfidenceLevel confidenceLevel) {
+    public StorageMappingDto saveOrUpdateMapping(Long tenantId, String artifactId, StorageType storageType,
+                                                 String storageName, Integer expireDays, ConfidenceLevel confidenceLevel) {
         Optional<StorageMapping> existingOpt = storageMappingRepository
                 .findByTenantIdAndArtifactIdAndStorageType(tenantId, artifactId, storageType);
 
@@ -69,7 +69,7 @@ public class StorageMappingService {
     }
 
     @Transactional
-    public void deleteMapping(Long tenantId, Long artifactId) {
+    public void deleteMapping(Long tenantId, String artifactId) {
         storageMappingRepository.deleteByTenantIdAndArtifactId(tenantId, artifactId);
     }
 }

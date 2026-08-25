@@ -33,7 +33,7 @@ public class ArtifactController {
     }
 
     @DeleteMapping("/{id}")
-    public void delete(@PathVariable Long packageId, @PathVariable Long id) {
+    public void delete(@PathVariable Long packageId, @PathVariable String id) {
         artifactService.delete(id);
     }
 }

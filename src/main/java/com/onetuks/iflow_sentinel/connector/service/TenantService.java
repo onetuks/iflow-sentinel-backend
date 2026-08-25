@@ -52,6 +52,11 @@ public class TenantService {
                 .authType(request.authType())
                 .clientId(request.clientId())
                 .clientSecret(request.clientSecret())
+                .interfaceUrl(request.interfaceUrl())
+                .interfaceTokenUrl(request.interfaceTokenUrl())
+                .interfaceAuthType(request.interfaceAuthType())
+                .interfaceUsername(request.interfaceUsername())
+                .interfacePassword(request.interfacePassword())
                 .build();
 
         ConnectionTestResult connectionResult = connectionService.testConnection(tenant);
@@ -86,6 +91,11 @@ public class TenantService {
                 .authType(request.authType())
                 .clientId(request.clientId())
                 .clientSecret(request.clientSecret())
+                .interfaceUrl(request.interfaceUrl())
+                .interfaceTokenUrl(request.interfaceTokenUrl())
+                .interfaceAuthType(request.interfaceAuthType())
+                .interfaceUsername(request.interfaceUsername())
+                .interfacePassword(request.interfacePassword())
                 .build();
         return connectionService.testConnection(tenant);
     }
@@ -100,6 +110,9 @@ public class TenantService {
         String secret = (request.clientSecret() != null && !request.clientSecret().isBlank())
                 ? request.clientSecret()
                 : existing.getClientSecret();
+        String interfacePass = (request.interfacePassword() != null && !request.interfacePassword().isBlank())
+                ? request.interfacePassword()
+                : existing.getInterfacePassword();
         Tenant tenant = Tenant.builder()
                 .name(request.name())
                 .odataUrl(request.odataUrl())
@@ -108,6 +121,11 @@ public class TenantService {
                 .authType(request.authType())
                 .clientId(request.clientId())
                 .clientSecret(secret)
+                .interfaceUrl(request.interfaceUrl() != null ? request.interfaceUrl() : existing.getInterfaceUrl())
+                .interfaceTokenUrl(request.interfaceTokenUrl() != null ? request.interfaceTokenUrl() : existing.getInterfaceTokenUrl())
+                .interfaceAuthType(request.interfaceAuthType() != null ? request.interfaceAuthType() : existing.getInterfaceAuthType())
+                .interfaceUsername(request.interfaceUsername() != null ? request.interfaceUsername() : existing.getInterfaceUsername())
+                .interfacePassword(interfacePass)
                 .build();
         return connectionService.testConnection(tenant);
     }
@@ -125,6 +143,10 @@ public class TenantService {
                 ? request.clientSecret()
                 : tenant.getClientSecret();
 
+        String newInterfacePassword = (request.interfacePassword() != null && !request.interfacePassword().isBlank())
+                ? request.interfacePassword()
+                : tenant.getInterfacePassword();
+
         tenant.update(
                 request.name(),
                 request.odataUrl(),
@@ -132,7 +154,12 @@ public class TenantService {
                 request.platformType(),
                 request.authType(),
                 request.clientId(),
-                newSecret);
+                newSecret,
+                request.interfaceUrl() != null ? request.interfaceUrl() : tenant.getInterfaceUrl(),
+                request.interfaceTokenUrl() != null ? request.interfaceTokenUrl() : tenant.getInterfaceTokenUrl(),
+                request.interfaceAuthType() != null ? request.interfaceAuthType() : tenant.getInterfaceAuthType(),
+                request.interfaceUsername(),
+                newInterfacePassword);
         return TenantResponse.from(tenantRepository.save(tenant));
     }
 

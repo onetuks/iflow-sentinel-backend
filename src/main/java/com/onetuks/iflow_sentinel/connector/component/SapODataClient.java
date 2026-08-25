@@ -60,7 +60,8 @@ public class SapODataClient {
             throw new ConnectorException("OData 호출 실패 (HTTP " + e.getStatusCode().value() + "): " + fullUrl,
                     e.getStatusCode().value(), e);
         } catch (ResourceAccessException e) {
-            throw new ConnectorException("OData 엔드포인트에 연결할 수 없습니다: " + fullUrl + " (원인: " + e.getMessage() + ")", -1, e);
+            throw new ConnectorException("OData 엔드포인트에 연결할 수 없습니다: " + fullUrl + " (원인: " + e.getMessage() + ")", -1,
+                    e);
         }
     }
 
@@ -86,14 +87,16 @@ public class SapODataClient {
                         .retrieve()
                         .body(typeRef);
             } catch (RestClientResponseException e) {
-                log.error("[OUTBOUND SAP OData] GET (Paginated, page {}) 실패 - HTTP Status: {}, URL: {}, ResponseBody: {}",
+                log.error(
+                        "[OUTBOUND SAP OData] GET (Paginated, page {}) 실패 - HTTP Status: {}, URL: {}, ResponseBody: {}",
                         pagesFetched, e.getStatusCode().value(), url, e.getResponseBodyAsString(), e);
                 throw new ConnectorException("OData 호출 실패 (HTTP " + e.getStatusCode().value() + "): " + url,
                         e.getStatusCode().value(), e);
             } catch (ResourceAccessException e) {
                 log.error("[OUTBOUND SAP OData] GET (Paginated, page {}) 연결 실패 - URL: {}, Message: {}",
                         pagesFetched, url, e.getMessage(), e);
-                throw new ConnectorException("OData 엔드포인트에 연결할 수 없습니다: " + url + " (원인: " + e.getMessage() + ")", -1, e);
+                throw new ConnectorException("OData 엔드포인트에 연결할 수 없습니다: " + url + " (원인: " + e.getMessage() + ")", -1,
+                        e);
             } catch (Exception e) {
                 log.error("[OUTBOUND SAP OData] GET (Paginated, page {}) 예외 발생 - URL: {}, Message: {}",
                         pagesFetched, url, e.getMessage(), e);
@@ -119,7 +122,8 @@ public class SapODataClient {
         return java.util.Optional.empty();
     }
 
-    public <T> T getEntity(Tenant tenant, String relativePath, ParameterizedTypeReference<ODataEntityResponse<T>> typeRef) {
+    public <T> T getEntity(Tenant tenant, String relativePath,
+            ParameterizedTypeReference<ODataEntityResponse<T>> typeRef) {
         String token = tokenProvider.getAccessToken(tenant);
         String fullUrl = buildUrl(tenant.getOdataUrl(), relativePath);
         log.info("[OUTBOUND SAP OData] GET (Entity) {}", fullUrl);
@@ -138,7 +142,8 @@ public class SapODataClient {
                     e.getStatusCode().value(), e);
         } catch (ResourceAccessException e) {
             log.error("[OUTBOUND SAP OData] GET (Entity) 연결 실패 - URL: {}, Message: {}", fullUrl, e.getMessage(), e);
-            throw new ConnectorException("OData 엔드포인트에 연결할 수 없습니다: " + fullUrl + " (원인: " + e.getMessage() + ")", -1, e);
+            throw new ConnectorException("OData 엔드포인트에 연결할 수 없습니다: " + fullUrl + " (원인: " + e.getMessage() + ")", -1,
+                    e);
         } catch (Exception e) {
             log.error("[OUTBOUND SAP OData] GET (Entity) 예외 발생 - URL: {}, Message: {}", fullUrl, e.getMessage(), e);
             throw e;
@@ -164,11 +169,13 @@ public class SapODataClient {
         } catch (RestClientResponseException e) {
             log.error("[OUTBOUND SAP OData] GET (Binary) 실패 - HTTP Status: {}, URL: {}, ResponseBody: {}",
                     e.getStatusCode().value(), fullUrl, e.getResponseBodyAsString(), e);
-            throw new ConnectorException("OData 바이너리/Payload 다운로드 실패 (HTTP " + e.getStatusCode().value() + "): " + fullUrl,
+            throw new ConnectorException(
+                    "OData 바이너리/Payload 다운로드 실패 (HTTP " + e.getStatusCode().value() + "): " + fullUrl,
                     e.getStatusCode().value(), e);
         } catch (ResourceAccessException e) {
             log.error("[OUTBOUND SAP OData] GET (Binary) 연결 실패 - URL: {}, Message: {}", fullUrl, e.getMessage(), e);
-            throw new ConnectorException("OData 엔드포인트에 연결할 수 없습니다: " + fullUrl + " (원인: " + e.getMessage() + ")", -1, e);
+            throw new ConnectorException("OData 엔드포인트에 연결할 수 없습니다: " + fullUrl + " (원인: " + e.getMessage() + ")", -1,
+                    e);
         } catch (Exception e) {
             log.error("[OUTBOUND SAP OData] GET (Binary) 예외 발생 - URL: {}, Message: {}", fullUrl, e.getMessage(), e);
             throw e;
@@ -216,37 +223,41 @@ public class SapODataClient {
                 throw new ConnectorException("CSRF 토큰을 발급받지 못했습니다.", 200);
             }
             List<String> setCookies = response.getHeaders().get(HttpHeaders.SET_COOKIE);
-            String cookie = setCookies == null ? "" : setCookies.stream()
-                    .map(c -> c.split(";", 2)[0])
-                    .collect(Collectors.joining("; "));
+            String cookie = setCookies == null ? ""
+                    : setCookies.stream()
+                            .map(c -> c.split(";", 2)[0])
+                            .collect(Collectors.joining("; "));
             return new CsrfToken(token, cookie);
         } catch (RestClientResponseException e) {
             throw new ConnectorException("CSRF 토큰 발급 실패 (HTTP " + e.getStatusCode().value() + "): " + baseUrl,
                     e.getStatusCode().value(), e);
         } catch (ResourceAccessException e) {
-            throw new ConnectorException("CSRF 토큰 발급 중 연결할 수 없습니다: " + baseUrl + " (원인: " + e.getMessage() + ")", -1, e);
+            throw new ConnectorException("CSRF 토큰 발급 중 연결할 수 없습니다: " + baseUrl + " (원인: " + e.getMessage() + ")", -1,
+                    e);
         }
     }
 
-    public List<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto> getMplFailures(Tenant tenant, String sapArtifactId, int top) {
+    public List<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto> getMplFailures(Tenant tenant,
+            String sapArtifactId, int top) {
         int fetchLimit = top > 0 ? Math.max(top * 3, 100) : 100;
-        
+
         // 7일 전 타임스탬프 계산 (ISO-8601 OData V2 datetime 포맷)
         java.time.LocalDateTime oneWeekAgo = java.time.LocalDateTime.now().minusDays(7);
-        String dateFilterStr = "LogStart ge datetime'" + oneWeekAgo.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")) + "'";
+        String dateFilterStr = "LogStart ge datetime'"
+                + oneWeekAgo.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")) + "'";
 
         // 1차 시도: 아티팩트 ID/Name + 7일 전 타임스탬프 필터 ($expand 사용 금지: 501 에러 방지)
         if (sapArtifactId != null && !sapArtifactId.isBlank()) {
             try {
-                String path1 = "/MessageProcessingLogs?$filter=" + dateFilterStr + 
-                               " and (IntegrationArtifact/Id eq '" + sapArtifactId + 
-                               "' or IntegrationArtifact/Name eq '" + sapArtifactId + 
-                               "' or IntegrationFlowName eq '" + sapArtifactId + "')" +
-                               "&$top=" + fetchLimit + "&$orderby=LogStart desc";
+                String path1 = "/MessageProcessingLogs?$filter=" + dateFilterStr +
+                        " and (IntegrationArtifact/Id eq '" + sapArtifactId +
+                        "' or IntegrationArtifact/Name eq '" + sapArtifactId +
+                        "' or IntegrationFlowName eq '" + sapArtifactId + "')" +
+                        "&$top=" + fetchLimit + "&$orderby=LogStart desc";
                 List<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto> logs = getCollection(
                         tenant, path1,
-                        new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto>>() {}
-                );
+                        new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto>>() {
+                        });
                 if (logs != null && !logs.isEmpty()) {
                     return logs;
                 }
@@ -255,15 +266,16 @@ public class SapODataClient {
             }
         }
 
-        // 2차 시도: 최근 7일간 실패/에러 상태 전역 필터 쿼리 (Status eq 'FAILED' or 'ESCALATED' or 'CANCELLED')
+        // 2차 시도: 최근 7일간 실패/에러 상태 전역 필터 쿼리 (Status eq 'FAILED' or 'ESCALATED' or
+        // 'CANCELLED')
         try {
-            String path2 = "/MessageProcessingLogs?$filter=" + dateFilterStr + 
-                           " and (Status eq 'FAILED' or Status eq 'ESCALATED' or Status eq 'CANCELLED')" +
-                           "&$top=" + fetchLimit + "&$orderby=LogStart desc";
+            String path2 = "/MessageProcessingLogs?$filter=" + dateFilterStr +
+                    " and (Status eq 'FAILED' or Status eq 'ESCALATED' or Status eq 'CANCELLED')" +
+                    "&$top=" + fetchLimit + "&$orderby=LogStart desc";
             List<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto> logs = getCollection(
                     tenant, path2,
-                    new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto>>() {}
-            );
+                    new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto>>() {
+                    });
             if (logs != null && !logs.isEmpty()) {
                 return logs;
             }
@@ -273,11 +285,12 @@ public class SapODataClient {
 
         // 3차 시도: 7일 전 최신 로그 수집 (Status 필터 오작동 시 안전선)
         try {
-            String path3 = "/MessageProcessingLogs?$filter=" + dateFilterStr + "&$top=" + fetchLimit + "&$orderby=LogStart desc";
+            String path3 = "/MessageProcessingLogs?$filter=" + dateFilterStr + "&$top=" + fetchLimit
+                    + "&$orderby=LogStart desc";
             return getCollection(
                     tenant, path3,
-                    new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto>>() {}
-            );
+                    new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto>>() {
+                    });
         } catch (Exception e3) {
             log.warn("3차 OData 최신 로그 수집 쿼리 시도 실패: {}", e3.getMessage());
             return List.of();
@@ -299,9 +312,100 @@ public class SapODataClient {
                 return new String(rawBytes, java.nio.charset.StandardCharsets.UTF_8);
             }
         } catch (Exception e) {
-            log.debug("MessageProcessingLogErrorInformations 평문 조회 실패 (MessageGuid={}): {}", messageGuid, e.getMessage());
+            log.debug("MessageProcessingLogErrorInformations 평문 조회 실패 (MessageGuid={}): {}", messageGuid,
+                    e.getMessage());
         }
         return null;
+    }
+
+    /**
+     * SAP CPI 배포된 ServiceEndpoints 목록 조회 API
+     * GET /api/v1/ServiceEndpoints
+     */
+    public List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> getServiceEndpoints(Tenant tenant) {
+        try {
+            return getCollection(
+                    tenant,
+                    "/ServiceEndpoints",
+                    new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto>>() {
+                    });
+        } catch (Exception e) {
+            log.warn("SAP ServiceEndpoints 목록 조회 실패: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * iFlow 인터페이스 엔드포인트로 메시지 페이로드를 직접 POST 전송한다.
+     * 테넌트에 등록된 인터페이스 인증 정보(Basic Auth 등)를 우선 사용하고, 없으면 테넌트 OAuth2 Bearer 토큰을 사용한다.
+     */
+    public ResponseEntity<String> callInterfaceEndpoint(Tenant tenant, String targetUrl, String payload,
+            String contentType) {
+        String authHeader;
+        if (tenant.getInterfaceAuthType() == com.onetuks.iflow_sentinel.connector.domain.tenant.TenantAuthType.BASIC
+                || (tenant.getInterfaceUsername() != null && !tenant.getInterfaceUsername().isBlank())) {
+            String username = tenant.getInterfaceUsername() != null ? tenant.getInterfaceUsername() : "";
+            String password = tenant.getInterfacePassword() != null ? tenant.getInterfacePassword() : "";
+            String authString = username + ":" + password;
+            authHeader = "Basic " + java.util.Base64.getEncoder()
+                    .encodeToString(authString.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } else {
+            String token = tokenProvider.getAccessToken(tenant);
+            authHeader = "Bearer " + token;
+        }
+
+        String fullUrl = targetUrl;
+        if (!fullUrl.startsWith("http://") && !fullUrl.startsWith("https://")) {
+            String baseUrl = (tenant.getInterfaceUrl() != null && !tenant.getInterfaceUrl().isBlank())
+                    ? tenant.getInterfaceUrl().trim()
+                    : (tenant.getOdataUrl() != null ? tenant.getOdataUrl() : "");
+
+            if (baseUrl.contains("/api/v1")) {
+                baseUrl = baseUrl.replace("/api/v1", "");
+            }
+            if (baseUrl.endsWith("/")) {
+                baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
+            }
+            if (!fullUrl.startsWith("/")) {
+                fullUrl = "/" + fullUrl;
+            }
+            fullUrl = baseUrl + fullUrl;
+        }
+
+        MediaType mediaType = MediaType.APPLICATION_JSON;
+        if (contentType != null && !contentType.isBlank()) {
+            try {
+                mediaType = MediaType.parseMediaType(contentType);
+            } catch (Exception ignored) {
+            }
+        }
+
+        log.info("[OUTBOUND INTERFACE CALL] POST {} (Auth: {}, Content-Type: {}, payloadLength: {})",
+                fullUrl, authHeader.startsWith("Basic") ? "Basic" : "Bearer", mediaType,
+                payload != null ? payload.length() : 0);
+
+        try {
+            return restClient.post()
+                    .uri(java.net.URI.create(fullUrl))
+                    .header(HttpHeaders.AUTHORIZATION, authHeader)
+                    .contentType(mediaType)
+                    .body(payload != null ? payload : "")
+                    .retrieve()
+                    .toEntity(String.class);
+        } catch (RestClientResponseException e) {
+            log.error("[OUTBOUND INTERFACE CALL] 실패 - HTTP Status: {}, URL: {}, ResponseBody: {}",
+                    e.getStatusCode().value(), fullUrl, e.getResponseBodyAsString(), e);
+            throw new ConnectorException(
+                    "인터페이스 직접 호출 실패 (HTTP " + e.getStatusCode().value() + "): " + e.getResponseBodyAsString(),
+                    e.getStatusCode().value(), e);
+        } catch (ResourceAccessException e) {
+            log.error("[OUTBOUND INTERFACE CALL] 연결 실패 - URL: {}, Message: {}", fullUrl, e.getMessage(), e);
+            throw new ConnectorException("인터페이스 엔드포인트에 연결할 수 없습니다: " + fullUrl + " (원인: " + e.getMessage() + ")", -1,
+                    e);
+        } catch (Exception e) {
+            log.error("[OUTBOUND INTERFACE CALL] 예외 발생 - URL: {}, Message: {}", fullUrl, e.getMessage(), e);
+            throw e;
+        }
     }
 
     private String buildUrl(String baseUrl, String relativePath) {

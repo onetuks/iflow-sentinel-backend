@@ -21,4 +21,8 @@ public class ConnectorException extends RuntimeException {
     public int statusCode() {
         return statusCode;
     }
+
+    public int getStatusCode() {
+        return statusCode;
+    }
 }

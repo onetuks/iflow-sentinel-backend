@@ -7,19 +7,22 @@ import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
 import com.onetuks.iflow_sentinel.connector.domain.tenant.TenantRepository;
 import com.onetuks.iflow_sentinel.connector.dto.ODataCollectionResponse;
 import com.onetuks.iflow_sentinel.exception.ConnectorException;
+import com.onetuks.iflow_sentinel.reprocess.domain.ReprocessHistory;
+import com.onetuks.iflow_sentinel.reprocess.domain.ReprocessHistoryRepository;
+import com.onetuks.iflow_sentinel.reprocess.domain.ReprocessStatus;
 import com.onetuks.iflow_sentinel.reprocess.domain.ReprocessSupportType;
 import com.onetuks.iflow_sentinel.reprocess.domain.StorageType;
 import com.onetuks.iflow_sentinel.reprocess.dto.MessageBodyResponse;
 import com.onetuks.iflow_sentinel.reprocess.dto.MessageReprocessRequest;
 import com.onetuks.iflow_sentinel.reprocess.dto.MessageReprocessResult;
 import com.onetuks.iflow_sentinel.reprocess.dto.MplFailureResponse;
+import com.onetuks.iflow_sentinel.reprocess.dto.ReprocessHistoryResponse;
 import com.onetuks.iflow_sentinel.reprocess.dto.SapDataStoreEntryDto;
 import com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto;
 import com.onetuks.iflow_sentinel.reprocess.dto.StorageMappingDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +32,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 
 @Service
@@ -40,21 +44,27 @@ public class MessageReprocessService {
     private final TenantRepository tenantRepository;
     private final SapODataClient sapODataClient;
     private final StorageMappingService storageMappingService;
+    private final ReprocessHistoryRepository reprocessHistoryRepository;
 
     public MessageReprocessService(ArtifactRepository artifactRepository,
-            TenantRepository tenantRepository,
-            SapODataClient sapODataClient,
-            StorageMappingService storageMappingService) {
+                                   TenantRepository tenantRepository,
+                                   SapODataClient sapODataClient,
+                                   StorageMappingService storageMappingService,
+                                   ReprocessHistoryRepository reprocessHistoryRepository) {
         this.artifactRepository = artifactRepository;
         this.tenantRepository = tenantRepository;
         this.sapODataClient = sapODataClient;
         this.storageMappingService = storageMappingService;
+        this.reprocessHistoryRepository = reprocessHistoryRepository;
     }
 
     @Transactional(readOnly = true)
-    public ReprocessSupportType getReprocessSupportType(Long artifactId) {
+    public ReprocessSupportType getReprocessSupportType(String artifactId) {
+        if (artifactId == null || artifactId.isBlank()) {
+            return ReprocessSupportType.NONE;
+        }
         return artifactRepository.findById(artifactId)
-                .map(a -> a.getReprocessSupportType())
+                .map(Artifact::getReprocessSupportType)
                 .orElse(ReprocessSupportType.NONE);
     }
 
@@ -65,23 +75,13 @@ public class MessageReprocessService {
 
         String sapArtifactId = null;
         String artifactName = null;
-        Long artifactDbId = null;
 
         if (artifactIdStr != null && !artifactIdStr.isBlank()) {
-            Optional<Artifact> optArtifact = artifactRepository.findBySapArtifactId(artifactIdStr);
-            if (optArtifact.isEmpty()) {
-                try {
-                    Long dbId = Long.parseLong(artifactIdStr);
-                    optArtifact = artifactRepository.findById(dbId);
-                } catch (NumberFormatException ignored) {
-                }
-            }
-
+            Optional<Artifact> optArtifact = artifactRepository.findById(artifactIdStr);
             if (optArtifact.isPresent()) {
                 Artifact artifact = optArtifact.get();
                 sapArtifactId = artifact.getSapArtifactId();
                 artifactName = artifact.getName();
-                artifactDbId = artifact.getId();
             } else {
                 sapArtifactId = artifactIdStr;
                 artifactName = artifactIdStr;
@@ -104,33 +104,33 @@ public class MessageReprocessService {
         if (sapArtifactId != null && !sapArtifactId.isBlank()) {
             final String targetId = sapArtifactId;
             rawLogs = rawLogs.stream()
-                    .filter(log -> this.isTargetArtifact(log, targetId))
+                    .filter(logDto -> this.isTargetArtifact(logDto, targetId))
                     .toList();
         }
 
-        // 2) Status (FAILED, ESCALATED, CANCELLED), SubStatus, CustomStatus (소문자
-        // 'fail', 'err', 'cancel' 포함) 에러 건 검증
+        // 2) Status (FAILED, ESCALATED, CANCELLED), SubStatus, CustomStatus (소문자 'fail', 'err', 'cancel' 포함) 에러 건 검증
         rawLogs = rawLogs.stream()
-                .filter(log -> this.isErrorStatus(log.status(), log.subStatus(), log.customStatus()))
+                .filter(logDto -> this.isErrorStatus(logDto.status(), logDto.subStatus(), logDto.customStatus()))
                 .toList();
 
         List<MplFailureResponse> result = new ArrayList<>();
 
-        // 저장소 정보 조회 (DB ID가 존재하는 경우 매핑 조회)
-        Optional<StorageMappingDto> dsMapping = artifactDbId != null
-                ? storageMappingService.getStorageMapping(tenantId, artifactDbId, StorageType.DATASTORE)
+        // 저장소 정보 조회 (sapArtifactId가 존재하는 경우 매핑 조회)
+        Optional<StorageMappingDto> dsMapping = sapArtifactId != null
+                ? storageMappingService.getStorageMapping(tenantId, sapArtifactId, StorageType.DATASTORE)
                 : Optional.empty();
-        Optional<StorageMappingDto> jmsMapping = artifactDbId != null
-                ? storageMappingService.getStorageMapping(tenantId, artifactDbId, StorageType.JMS)
+        Optional<StorageMappingDto> jmsMapping = sapArtifactId != null
+                ? storageMappingService.getStorageMapping(tenantId, sapArtifactId, StorageType.JMS)
                 : Optional.empty();
 
         String storageName = dsMapping.filter(m -> m != null && m.storageName() != null)
-                .map(m -> m.storageName())
-                .orElseGet(() -> jmsMapping.filter(m -> m != null && m.storageName() != null).map(m -> m.storageName())
+                .map(StorageMappingDto::storageName)
+                .orElseGet(() -> jmsMapping.filter(m -> m != null && m.storageName() != null)
+                        .map(StorageMappingDto::storageName)
                         .orElse("N/A"));
         String storageType = dsMapping.isPresent() ? "DATASTORE" : (jmsMapping.isPresent() ? "JMS" : "UNKNOWN");
         Integer expireDays = dsMapping.filter(m -> m != null && m.expireDays() != null)
-                .map(m -> m.expireDays())
+                .map(StorageMappingDto::expireDays)
                 .orElse(null);
 
         for (SapMplLogDto dto : rawLogs) {
@@ -142,7 +142,6 @@ public class MessageReprocessService {
             String errorDetail = dto.getEffectiveErrorDetail();
             if (errorDetail == null || errorDetail.isBlank()) {
                 // $expand가 거부되는 SAP OData 501 회피를 위해 개별 평문 에러 조회 호출
-                // (/MessageProcessingLogErrorInformations('{messageGuid}')/$value)
                 errorDetail = sapODataClient.getMplLogErrorInformation(tenant, dto.messageGuid());
             }
             if (errorDetail == null || errorDetail.isBlank()) {
@@ -155,10 +154,10 @@ public class MessageReprocessService {
             }
             String effectiveArtifactName = (dto.integrationArtifact() != null
                     && dto.integrationArtifact().name() != null && !dto.integrationArtifact().name().isBlank())
-                            ? dto.integrationArtifact().name()
-                            : (dto.integrationFlowName() != null && !dto.integrationFlowName().isBlank()
-                                    ? dto.integrationFlowName()
-                                    : artifactName);
+                    ? dto.integrationArtifact().name()
+                    : (dto.integrationFlowName() != null && !dto.integrationFlowName().isBlank()
+                    ? dto.integrationFlowName()
+                    : artifactName);
 
             result.add(new MplFailureResponse(
                     dto.messageGuid(),
@@ -179,14 +178,14 @@ public class MessageReprocessService {
     }
 
     @Transactional(readOnly = true)
-    public MessageBodyResponse getMessageBody(Long tenantId, Long artifactId, String messageId,
-            StorageType storageType) {
+    public MessageBodyResponse getMessageBody(Long tenantId, String artifactId, String messageId,
+                                              StorageType storageType) {
         return getMessageBody(tenantId, artifactId, messageId, storageType, null);
     }
 
     @Transactional(readOnly = true)
-    public MessageBodyResponse getMessageBody(Long tenantId, Long artifactId, String messageId, StorageType storageType,
-            String requestedStorageName) {
+    public MessageBodyResponse getMessageBody(Long tenantId, String artifactId, String messageId, StorageType storageType,
+                                              String requestedStorageName) {
         log.info("메시지 바디 조회 요청 시작 - tenantId: {}, artifactId: {}, messageId: {}, storageType: {}, requestedStorageName: {}",
                 tenantId, artifactId, messageId, storageType, requestedStorageName);
 
@@ -196,8 +195,9 @@ public class MessageReprocessService {
         String storageName = requestedStorageName;
         Integer expireDays = 30;
 
-        Optional<StorageMappingDto> mapping = storageMappingService.getStorageMapping(tenantId, artifactId,
-                storageType);
+        Optional<StorageMappingDto> mapping = (artifactId != null && !artifactId.isBlank())
+                ? storageMappingService.getStorageMapping(tenantId, artifactId, storageType)
+                : Optional.empty();
         if (mapping.isPresent()) {
             if (storageName == null || storageName.isBlank()) {
                 storageName = mapping.get().storageName();
@@ -207,9 +207,11 @@ public class MessageReprocessService {
 
         if (storageName == null || storageName.isBlank()) {
             // Artifact 이름 기반 순수 명칭 fallback
-            storageName = artifactRepository.findById(artifactId)
-                    .map(a -> a.getName())
-                    .orElse(null);
+            if (artifactId != null && !artifactId.isBlank()) {
+                storageName = artifactRepository.findById(artifactId)
+                        .map(Artifact::getName)
+                        .orElse(null);
+            }
         }
 
         String messageBody;
@@ -249,19 +251,15 @@ public class MessageReprocessService {
     }
 
     /**
-     * MessageId로 DataStoreEntries에서 엔트리를 찾는다. SAP OData의 Id는 MessageId가 아니라
-     * "{IntegrationFlow}_{Timestamp}_{Sender|Receiver}_{MessageId}" 형태의 복합 문자열이므로,
-     * 정확한 복합키(Id, DataStoreName, IntegrationFlow, Type)를 얻으려면 실제 엔트리를 조회해
-     * 확인해야 한다. DataStoreEntries는 MessageId에 대한 $filter를 지원하지 않아(400 Bad
-     * Request) 페이지(__next)를 순회하며 매칭되는 항목을 찾는다.
+     * MessageId로 DataStoreEntries에서 엔트리를 찾는다.
      */
     private SapDataStoreEntryDto findDataStoreEntry(Tenant tenant, String messageId) {
         log.info("DataStore 엔트리 검색 API 호출 - tenantId: {}, messageId: {}", tenant.getId(), messageId);
         try {
             SapDataStoreEntryDto entry = sapODataClient.findInCollection(tenant, "/DataStoreEntries",
-                    new ParameterizedTypeReference<ODataCollectionResponse<SapDataStoreEntryDto>>() {
-                    },
-                    e -> messageId.equalsIgnoreCase(e.messageId()))
+                            new ParameterizedTypeReference<ODataCollectionResponse<SapDataStoreEntryDto>>() {
+                            },
+                            e -> messageId.equalsIgnoreCase(e.messageId()))
                     .orElseThrow(() -> {
                         log.warn("DataStore 엔트리 검색 실패 - MessageId={} 에 해당하는 엔트리가 없습니다.", messageId);
                         return new ConnectorException(
@@ -315,7 +313,7 @@ public class MessageReprocessService {
                 binaryContent[2] == 0x03 && binaryContent[3] == 0x04) {
             log.info("바이너리 Content가 ZIP 포맷입니다. ZipInputStream으로 압축 해제를 진행합니다.");
             try (java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(binaryContent);
-                    java.util.zip.ZipInputStream zis = new java.util.zip.ZipInputStream(bais)) {
+                 java.util.zip.ZipInputStream zis = new java.util.zip.ZipInputStream(bais)) {
 
                 java.util.zip.ZipEntry zipEntry;
                 byte[] bodyBytes = null;
@@ -354,34 +352,226 @@ public class MessageReprocessService {
         Tenant tenant = tenantRepository.findById(request.tenantId())
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 테넌트입니다. ID=" + request.tenantId()));
 
-        String deepLinkUrl = buildSapDeepLinkUrl(tenant, request.storageType(), request.storageName());
+        Artifact artifact = null;
+        String artifactName = null;
+        if (request.artifactId() != null) {
+            artifact = artifactRepository.findById(request.artifactId()).orElse(null);
+            if (artifact != null) {
+                artifactName = artifact.getName();
+            }
+        }
 
-        if (request.storageType() == StorageType.DATASTORE) {
-            executeDataStoreReprocess(tenant, request.messageId());
-            return new MessageReprocessResult(
-                    request.messageId(),
-                    true,
-                    "Data Store (" + request.storageName() + ") 메시지 재처리 요청을 전달했습니다.",
-                    request.storageType().name(),
-                    request.storageName(),
-                    LocalDateTime.now(),
-                    deepLinkUrl);
+        String reprocessedBy = (request.reprocessedBy() != null && !request.reprocessedBy().isBlank())
+                ? request.reprocessedBy()
+                : "SYSTEM";
+
+        String deepLinkUrl = buildSapDeepLinkUrl(tenant, request.storageType(), request.storageName());
+        LocalDateTime now = LocalDateTime.now();
+
+        // 1. DataStore 메시지 재처리 또는 페이로드가 명시된 재처리 요청: 인터페이스 직접 호출 실행
+        if (request.storageType() == StorageType.DATASTORE || (request.payload() != null && !request.payload().isBlank())) {
+            String targetEndpointUrl = resolveInterfaceEndpointUrl(tenant, artifact, request.endpointUrl());
+            try {
+                // 페이로드 확보
+                String payload = request.payload();
+                if (payload == null || payload.isBlank()) {
+                    payload = fetchBinaryPayload(tenant, request.messageId());
+                }
+
+                String contentType = determineContentType(payload);
+                org.springframework.http.ResponseEntity<String> response = sapODataClient.callInterfaceEndpoint(
+                        tenant, targetEndpointUrl, payload, contentType
+                );
+
+                int statusCode = response.getStatusCode().value();
+                String successMessage = "인터페이스 직접 호출 재처리 성공 [HTTP " + statusCode + "] - Endpoint: " + targetEndpointUrl;
+
+                ReprocessHistory history = ReprocessHistory.builder()
+                        .tenantId(request.tenantId())
+                        .tenantName(tenant.getName())
+                        .artifactId(request.artifactId())
+                        .artifactName(artifactName)
+                        .messageId(request.messageId())
+                        .storageType(request.storageType())
+                        .storageName(request.storageName())
+                        .status(ReprocessStatus.SUCCESS)
+                        .statusMessage(successMessage)
+                        .reprocessedAt(now)
+                        .reprocessedBy(reprocessedBy)
+                        .deepLinkUrl(deepLinkUrl)
+                        .endpointUrl(targetEndpointUrl)
+                        .httpStatusCode(statusCode)
+                        .build();
+                ReprocessHistory savedHistory = reprocessHistoryRepository.save(history);
+
+                log.info("인터페이스 직접 호출 메시지 재처리 성공 및 히스토리 저장 완료 - historyId: {}, messageId: {}, endpoint: {}",
+                        savedHistory.getId(), request.messageId(), targetEndpointUrl);
+
+                return new MessageReprocessResult(
+                        savedHistory.getId(),
+                        request.messageId(),
+                        true,
+                        successMessage,
+                        request.storageType().name(),
+                        request.storageName(),
+                        now,
+                        deepLinkUrl,
+                        targetEndpointUrl,
+                        statusCode);
+            } catch (Exception e) {
+                String failureMessage = "인터페이스 직접 호출 재처리 실패: " + e.getMessage();
+                Integer httpStatus = (e instanceof ConnectorException ce) ? ce.getStatusCode() : null;
+                log.error("인터페이스 직접 호출 재처리 실패 - messageId: {}, endpoint: {}, 사유: {}",
+                        request.messageId(), targetEndpointUrl, failureMessage, e);
+
+                ReprocessHistory history = ReprocessHistory.builder()
+                        .tenantId(request.tenantId())
+                        .tenantName(tenant.getName())
+                        .artifactId(request.artifactId())
+                        .artifactName(artifactName)
+                        .messageId(request.messageId())
+                        .storageType(request.storageType())
+                        .storageName(request.storageName())
+                        .status(ReprocessStatus.FAILED)
+                        .statusMessage(failureMessage)
+                        .reprocessedAt(now)
+                        .reprocessedBy(reprocessedBy)
+                        .deepLinkUrl(deepLinkUrl)
+                        .endpointUrl(targetEndpointUrl)
+                        .httpStatusCode(httpStatus)
+                        .build();
+                ReprocessHistory savedHistory = reprocessHistoryRepository.save(history);
+
+                return new MessageReprocessResult(
+                        savedHistory.getId(),
+                        request.messageId(),
+                        false,
+                        failureMessage,
+                        request.storageType().name(),
+                        request.storageName(),
+                        now,
+                        deepLinkUrl,
+                        targetEndpointUrl,
+                        httpStatus);
+            }
         } else {
-            // JMS 큐 메시지는 Web UI 매핑 안내 반환
+            // 페이로드가 명시되지 않은 순수 JMS 큐 메시지는 Web UI 매핑 안내 반환 및 히스토리 기록
+            String jmsMessage = "JMS 큐 (" + request.storageName() + ") 메시지 재처리를 위해 SAP IS Manage Queues 바로가기 링크가 생성되었습니다.";
+            ReprocessHistory history = ReprocessHistory.builder()
+                    .tenantId(request.tenantId())
+                    .tenantName(tenant.getName())
+                    .artifactId(request.artifactId())
+                    .artifactName(artifactName)
+                    .messageId(request.messageId())
+                    .storageType(request.storageType())
+                    .storageName(request.storageName())
+                    .status(ReprocessStatus.SUCCESS)
+                    .statusMessage(jmsMessage)
+                    .reprocessedAt(now)
+                    .reprocessedBy(reprocessedBy)
+                    .deepLinkUrl(deepLinkUrl)
+                    .endpointUrl(null)
+                    .httpStatusCode(null)
+                    .build();
+            ReprocessHistory savedHistory = reprocessHistoryRepository.save(history);
+
+            log.info("JMS 메시지 재처리 가이드 생성 및 히스토리 저장 완료 - historyId: {}, messageId: {}",
+                    savedHistory.getId(), request.messageId());
+
             return new MessageReprocessResult(
+                    savedHistory.getId(),
                     request.messageId(),
                     true,
-                    "JMS 큐 (" + request.storageName() + ") 메시지 재처리를 위해 SAP IS Manage Queues 바로가기 링크가 생성되었습니다.",
+                    jmsMessage,
                     request.storageType().name(),
                     request.storageName(),
-                    LocalDateTime.now(),
-                    deepLinkUrl);
+                    now,
+                    deepLinkUrl,
+                    null,
+                    null);
         }
     }
 
-    private void executeDataStoreReprocess(Tenant tenant, String messageId) {
-        SapDataStoreEntryDto entry = findDataStoreEntry(tenant, messageId);
-        sapODataClient.executeAction(tenant, HttpMethod.POST, buildEntryKeyPath(entry) + "/reprocess");
+    @Transactional(readOnly = true)
+    public List<ReprocessHistoryResponse> getReprocessHistories(Long tenantId, String artifactId, String messageId, ReprocessStatus status) {
+        return reprocessHistoryRepository.searchHistories(tenantId, artifactId, messageId, status)
+                .stream()
+                .map(ReprocessHistoryResponse::from)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ReprocessHistoryResponse getReprocessHistory(Long id) {
+        return reprocessHistoryRepository.findById(id)
+                .map(ReprocessHistoryResponse::from)
+                .orElseThrow(() -> new NoSuchElementException("존재하지 않는 재처리 이력입니다. ID=" + id));
+    }
+
+    @Transactional
+    public void deleteReprocessHistory(Long id) {
+        if (!reprocessHistoryRepository.existsById(id)) {
+            throw new NoSuchElementException("존재하지 않는 재처리 이력입니다. ID=" + id);
+        }
+        reprocessHistoryRepository.deleteById(id);
+    }
+
+    /**
+     * iFlow 인터페이스의 호출 엔드포인트 URL을 탐색한다.
+     * 1) 요청에 직접 전달된 endpointUrl
+     * 2) SAP OData /ServiceEndpoints API 조회 매칭
+     * 3) 테넌트 호스트 URL 기반 기본 엔드포인트 fallback
+     */
+    public String resolveInterfaceEndpointUrl(Tenant tenant, Artifact artifact, String requestedEndpointUrl) {
+        if (requestedEndpointUrl != null && !requestedEndpointUrl.isBlank()) {
+            return requestedEndpointUrl.trim();
+        }
+
+        if (artifact != null) {
+            String artName = artifact.getName();
+            String sapArtId = artifact.getSapArtifactId();
+
+            try {
+                List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> endpoints =
+                        sapODataClient.getServiceEndpoints(tenant);
+                if (endpoints != null && !endpoints.isEmpty()) {
+                    for (var ep : endpoints) {
+                        if (ep.Url() == null || ep.Url().isBlank()) {
+                            continue;
+                        }
+                        if (ep.Name() != null) {
+                            if (ep.Name().equalsIgnoreCase(artName) || ep.Name().equalsIgnoreCase(sapArtId)
+                                    || (sapArtId != null && ep.Name().contains(sapArtId))
+                                    || (artName != null && ep.Name().contains(artName))) {
+                                return ep.Url();
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("SAP ServiceEndpoints 조회 중 오류 발생 (Fallback 사용): {}", e.getMessage());
+            }
+
+            // Fallback: /http/{sapArtifactId}
+            String pathIdentifier = (sapArtId != null && !sapArtId.isBlank()) ? sapArtId : artName;
+            if (pathIdentifier != null && !pathIdentifier.isBlank()) {
+                return "/http/" + pathIdentifier;
+            }
+        }
+
+        return "/http/reprocess";
+    }
+
+    private String determineContentType(String payload) {
+        if (payload == null || payload.isBlank()) {
+            return "application/json";
+        }
+        String trimmed = payload.trim();
+        if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+            return "application/json";
+        } else if (trimmed.startsWith("<")) {
+            return "application/xml";
+        }
+        return "text/plain;charset=UTF-8";
     }
 
     private ExpirationInfo calculateExpiration(LocalDateTime logStart, Integer expireDays) {

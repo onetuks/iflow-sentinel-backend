@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 public record StorageMappingDto(
         Long id,
         Long tenantId,
-        Long artifactId,
+        String artifactId,
         StorageType storageType,
         String storageName,
         Integer expireDays,

@@ -7,9 +7,9 @@ import java.util.Optional;
 
 public interface StorageMappingRepository extends JpaRepository<StorageMapping, Long> {
 
-    List<StorageMapping> findByTenantIdAndArtifactId(Long tenantId, Long artifactId);
+    List<StorageMapping> findByTenantIdAndArtifactId(Long tenantId, String artifactId);
 
-    Optional<StorageMapping> findByTenantIdAndArtifactIdAndStorageType(Long tenantId, Long artifactId, StorageType storageType);
+    Optional<StorageMapping> findByTenantIdAndArtifactIdAndStorageType(Long tenantId, String artifactId, StorageType storageType);
 
-    void deleteByTenantIdAndArtifactId(Long tenantId, Long artifactId);
+    void deleteByTenantIdAndArtifactId(Long tenantId, String artifactId);
 }

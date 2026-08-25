@@ -1,11 +1,13 @@
 package com.onetuks.iflow_sentinel.reprocess.controller;
 
+import com.onetuks.iflow_sentinel.reprocess.domain.ReprocessStatus;
 import com.onetuks.iflow_sentinel.reprocess.domain.ReprocessSupportType;
 import com.onetuks.iflow_sentinel.reprocess.domain.StorageType;
 import com.onetuks.iflow_sentinel.reprocess.dto.MessageBodyResponse;
 import com.onetuks.iflow_sentinel.reprocess.dto.MessageReprocessRequest;
 import com.onetuks.iflow_sentinel.reprocess.dto.MessageReprocessResult;
 import com.onetuks.iflow_sentinel.reprocess.dto.MplFailureResponse;
+import com.onetuks.iflow_sentinel.reprocess.dto.ReprocessHistoryResponse;
 import com.onetuks.iflow_sentinel.reprocess.dto.StorageMappingDto;
 import com.onetuks.iflow_sentinel.reprocess.service.MessageReprocessService;
 import com.onetuks.iflow_sentinel.reprocess.service.StorageMappingService;
@@ -36,7 +38,7 @@ public class MessageReprocessController {
     }
 
     @GetMapping("/artifacts/{artifactId}/support-type")
-    public ResponseEntity<ReprocessSupportType> getReprocessSupportType(@PathVariable Long artifactId) {
+    public ResponseEntity<ReprocessSupportType> getReprocessSupportType(@PathVariable String artifactId) {
         ReprocessSupportType supportType = messageReprocessService.getReprocessSupportType(artifactId);
         return ResponseEntity.ok(supportType);
     }
@@ -54,7 +56,7 @@ public class MessageReprocessController {
     public ResponseEntity<MessageBodyResponse> getMessageBody(
             @PathVariable String messageId,
             @RequestParam Long tenantId,
-            @RequestParam Long artifactId,
+            @RequestParam String artifactId,
             @RequestParam StorageType storageType,
             @RequestParam(required = false) String storageName) {
         MessageBodyResponse response = messageReprocessService.getMessageBody(tenantId, artifactId, messageId, storageType, storageName);
@@ -67,10 +69,32 @@ public class MessageReprocessController {
         return ResponseEntity.ok(result);
     }
 
+    @GetMapping("/histories")
+    public ResponseEntity<List<ReprocessHistoryResponse>> getReprocessHistories(
+            @RequestParam(required = false) Long tenantId,
+            @RequestParam(required = false) String artifactId,
+            @RequestParam(required = false) String messageId,
+            @RequestParam(required = false) ReprocessStatus status) {
+        List<ReprocessHistoryResponse> histories = messageReprocessService.getReprocessHistories(tenantId, artifactId, messageId, status);
+        return ResponseEntity.ok(histories);
+    }
+
+    @GetMapping("/histories/{id}")
+    public ResponseEntity<ReprocessHistoryResponse> getReprocessHistory(@PathVariable Long id) {
+        ReprocessHistoryResponse history = messageReprocessService.getReprocessHistory(id);
+        return ResponseEntity.ok(history);
+    }
+
+    @DeleteMapping("/histories/{id}")
+    public ResponseEntity<Void> deleteReprocessHistory(@PathVariable Long id) {
+        messageReprocessService.deleteReprocessHistory(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/storage-mappings")
     public ResponseEntity<List<StorageMappingDto>> getStorageMappings(
             @RequestParam Long tenantId,
-            @RequestParam Long artifactId) {
+            @RequestParam String artifactId) {
         List<StorageMappingDto> mappings = storageMappingService.getStorageMappings(tenantId, artifactId);
         return ResponseEntity.ok(mappings);
     }
@@ -90,7 +114,7 @@ public class MessageReprocessController {
     @DeleteMapping("/storage-mappings")
     public ResponseEntity<Void> deleteStorageMapping(
             @RequestParam Long tenantId,
-            @RequestParam Long artifactId) {
+            @RequestParam String artifactId) {
         storageMappingService.deleteMapping(tenantId, artifactId);
         return ResponseEntity.noContent().build();
     }

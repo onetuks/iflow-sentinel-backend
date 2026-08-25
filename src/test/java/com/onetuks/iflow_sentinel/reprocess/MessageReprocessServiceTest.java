@@ -8,12 +8,14 @@ import com.onetuks.iflow_sentinel.connector.domain.integrationpackage.Integratio
 import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
 import com.onetuks.iflow_sentinel.connector.domain.tenant.TenantRepository;
 import com.onetuks.iflow_sentinel.reprocess.domain.ConfidenceLevel;
+import com.onetuks.iflow_sentinel.reprocess.domain.ReprocessStatus;
 import com.onetuks.iflow_sentinel.reprocess.domain.ReprocessSupportType;
 import com.onetuks.iflow_sentinel.reprocess.domain.StorageType;
 import com.onetuks.iflow_sentinel.reprocess.dto.MessageBodyResponse;
 import com.onetuks.iflow_sentinel.reprocess.dto.MessageReprocessRequest;
 import com.onetuks.iflow_sentinel.reprocess.dto.MessageReprocessResult;
 import com.onetuks.iflow_sentinel.reprocess.dto.MplFailureResponse;
+import com.onetuks.iflow_sentinel.reprocess.dto.ReprocessHistoryResponse;
 import com.onetuks.iflow_sentinel.reprocess.service.MessageReprocessService;
 import com.onetuks.iflow_sentinel.reprocess.service.StorageMappingService;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +26,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.NoSuchElementException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -61,6 +64,9 @@ class MessageReprocessServiceTest {
                 .authType(com.onetuks.iflow_sentinel.connector.domain.tenant.TenantAuthType.OAUTH2_CLIENT_CREDENTIALS)
                 .clientId("client-id")
                 .clientSecret("client-secret")
+                .interfaceAuthType(com.onetuks.iflow_sentinel.connector.domain.tenant.TenantAuthType.BASIC)
+                .interfaceUsername("iflow-user")
+                .interfacePassword("iflow-pass")
                 .build());
 
         integrationPackage = packageRepository.save(IntegrationPackage.builder()
@@ -96,7 +102,7 @@ class MessageReprocessServiceTest {
     @Test
     @DisplayName("MPL 실패 목록을 조회하여 DTO로 반환한다 (OData 연결 오류 발생 시에도 안전한 폴백 제공)")
     void getMplFailures() {
-        List<MplFailureResponse> failures = messageReprocessService.getMplFailures(tenant.getId(), String.valueOf(artifact.getId()), 10);
+        List<MplFailureResponse> failures = messageReprocessService.getMplFailures(tenant.getId(), artifact.getId(), 10);
         assertThat(failures).isNotNull();
     }
 
@@ -122,16 +128,99 @@ class MessageReprocessServiceTest {
     }
 
     @Test
-    @DisplayName("JMS 메시지 재처리 실행 요청 시 딥링크 및 반자동 안내 메시지를 반환한다")
+    @DisplayName("JMS 메시지 재처리 실행 요청 시 딥링크 및 반자동 안내 메시지를 반환하고 히스토리를 저장한다")
     void reprocessMessage_jms() {
         MessageReprocessRequest request = new MessageReprocessRequest(
-                tenant.getId(), artifact.getId(), "MSG_JMS_1", StorageType.JMS, "JMS_QUEUE_TEST"
+                tenant.getId(), artifact.getId(), "MSG_JMS_1", StorageType.JMS, "JMS_QUEUE_TEST", "USER_ADMIN"
         );
 
         MessageReprocessResult result = messageReprocessService.reprocessMessage(request);
 
         assertThat(result.success()).isTrue();
+        assertThat(result.historyId()).isNotNull();
         assertThat(result.deepLinkUrl()).contains("JmsQueues?queue=JMS_QUEUE_TEST");
         assertThat(result.statusMessage()).contains("Manage Queues 바로가기 링크");
+
+        // 히스토리 단건 조회 확인
+        ReprocessHistoryResponse history = messageReprocessService.getReprocessHistory(result.historyId());
+        assertThat(history.messageId()).isEqualTo("MSG_JMS_1");
+        assertThat(history.status()).isEqualTo(ReprocessStatus.SUCCESS);
+        assertThat(history.reprocessedBy()).isEqualTo("USER_ADMIN");
+        assertThat(history.artifactName()).isEqualTo("Test iFlow");
+    }
+
+    @Test
+    @DisplayName("DataStore 메시지 재처리 실패 시 FAILED 상태로 히스토리가 기록되고 실패 결과가 반환된다")
+    void reprocessMessage_datastore_fail() {
+        MessageReprocessRequest request = new MessageReprocessRequest(
+                tenant.getId(), artifact.getId(), "MSG_DS_UNKNOWN", StorageType.DATASTORE, "DS_TEST", "TEST_USER"
+        );
+
+        MessageReprocessResult result = messageReprocessService.reprocessMessage(request);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.historyId()).isNotNull();
+        assertThat(result.statusMessage()).contains("인터페이스 직접 호출 재처리 실패");
+
+        // 히스토리 조회
+        ReprocessHistoryResponse history = messageReprocessService.getReprocessHistory(result.historyId());
+        assertThat(history.status()).isEqualTo(ReprocessStatus.FAILED);
+        assertThat(history.statusMessage()).contains("인터페이스 직접 호출 재처리 실패");
+    }
+
+    @Test
+    @DisplayName("인터페이스 엔드포인트 URL 해석 로직이 올바르게 동작한다")
+    void resolveInterfaceEndpointUrl() {
+        // 1. 요청에 지정된 endpointUrl 우선
+        String customUrl = "https://custom.endpoint/api";
+        String resolved1 = messageReprocessService.resolveInterfaceEndpointUrl(tenant, artifact, customUrl);
+        assertThat(resolved1).isEqualTo(customUrl);
+
+        // 2. 아티팩트 ID 기반 Fallback
+        String resolved2 = messageReprocessService.resolveInterfaceEndpointUrl(tenant, artifact, null);
+        assertThat(resolved2).isEqualTo("/http/iflow_test");
+
+        // 3. 아티팩트 정보가 없는 경우 기본 Fallback
+        String resolved3 = messageReprocessService.resolveInterfaceEndpointUrl(tenant, null, null);
+        assertThat(resolved3).isEqualTo("/http/reprocess");
+    }
+
+    @Test
+    @DisplayName("재처리 히스토리 목록 검색 및 필터링이 정상 작동한다")
+    void getReprocessHistories() {
+        MessageReprocessRequest request1 = new MessageReprocessRequest(
+                tenant.getId(), artifact.getId(), "MSG_HIST_1", StorageType.JMS, "JMS_QUEUE_TEST", "USER_1"
+        );
+        MessageReprocessRequest request2 = new MessageReprocessRequest(
+                tenant.getId(), artifact.getId(), "MSG_HIST_2", StorageType.JMS, "JMS_QUEUE_TEST", "USER_2"
+        );
+
+        messageReprocessService.reprocessMessage(request1);
+        messageReprocessService.reprocessMessage(request2);
+
+        List<ReprocessHistoryResponse> allHistories = messageReprocessService.getReprocessHistories(
+                tenant.getId(), artifact.getId(), null, null
+        );
+        assertThat(allHistories).hasSizeGreaterThanOrEqualTo(2);
+
+        List<ReprocessHistoryResponse> filtered = messageReprocessService.getReprocessHistories(
+                tenant.getId(), artifact.getId(), "HIST_1", ReprocessStatus.SUCCESS
+        );
+        assertThat(filtered).hasSize(1);
+        assertThat(filtered.get(0).messageId()).isEqualTo("MSG_HIST_1");
+    }
+
+    @Test
+    @DisplayName("재처리 히스토리를 삭제한다")
+    void deleteReprocessHistory() {
+        MessageReprocessRequest request = new MessageReprocessRequest(
+                tenant.getId(), artifact.getId(), "MSG_DEL_1", StorageType.JMS, "JMS_QUEUE_TEST", "USER_1"
+        );
+        MessageReprocessResult result = messageReprocessService.reprocessMessage(request);
+
+        messageReprocessService.deleteReprocessHistory(result.historyId());
+
+        assertThatThrownBy(() -> messageReprocessService.getReprocessHistory(result.historyId()))
+                .isInstanceOf(NoSuchElementException.class);
     }
 }

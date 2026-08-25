@@ -136,4 +136,46 @@ class SapODataClientTest {
 
                 mockServer.verify();
         }
+
+        @Test
+        void callInterfaceEndpointUsesBasicAuthWhenConfigured() {
+                // Basic Auth 헤더: iflow-user:iflow-password -> aWZsb3ctdXNlcjppZmxvdy1wYXNzd29yZA==
+                String expectedBasic = "Basic " + java.util.Base64.getEncoder().encodeToString("iflow-user:iflow-password".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+                mockServer.expect(requestTo("https://test-rt.cfapps.eu10.hana.ondemand.com/http/my-iflow"))
+                                .andExpect(method(HttpMethod.POST))
+                                .andExpect(header(HttpHeaders.AUTHORIZATION, expectedBasic))
+                                .andExpect(header(HttpHeaders.CONTENT_TYPE, "application/json"))
+                                .andRespond(withSuccess("{\"status\":\"SUCCESS\"}", MediaType.APPLICATION_JSON));
+
+                org.springframework.http.ResponseEntity<String> response = odataClient.callInterfaceEndpoint(
+                                tenant, "/http/my-iflow", "{\"data\":\"test\"}", "application/json"
+                );
+
+                assertThat(response.getStatusCode().value()).isEqualTo(200);
+                assertThat(response.getBody()).contains("SUCCESS");
+                mockServer.verify();
+        }
+
+        @Test
+        void getServiceEndpointsFetchesCollectionWithBearerAuth() {
+                mockServer.expect(requestTo(TOKEN_URL))
+                                .andExpect(method(HttpMethod.POST))
+                                .andRespond(withSuccess(
+                                                "{\"access_token\":\"tok-abc\",\"expires_in\":3600,\"token_type\":\"bearer\"}",
+                                                MediaType.APPLICATION_JSON));
+                mockServer.expect(requestTo(ODATA_URL + "/ServiceEndpoints"))
+                                .andExpect(method(HttpMethod.GET))
+                                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer tok-abc"))
+                                .andRespond(withSuccess(
+                                                "{\"d\":{\"results\":[{\"Name\":\"IFLOW_1\",\"Url\":\"https://tenant.example.com/http/iflow1\",\"Protocol\":\"HTTPS\"}]}}",
+                                                MediaType.APPLICATION_JSON));
+
+                List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> endpoints = odataClient.getServiceEndpoints(tenant);
+
+                assertThat(endpoints).hasSize(1);
+                assertThat(endpoints.get(0).Name()).isEqualTo("IFLOW_1");
+                assertThat(endpoints.get(0).Url()).isEqualTo("https://tenant.example.com/http/iflow1");
+                mockServer.verify();
+        }
 }

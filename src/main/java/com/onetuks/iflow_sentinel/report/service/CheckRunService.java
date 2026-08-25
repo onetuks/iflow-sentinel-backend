@@ -68,9 +68,9 @@ public class CheckRunService {
                 this.storageMappingService = storageMappingService;
         }
 
-        public CheckRunResponse run(Long projectId, Long artifactId) {
+        public CheckRunResponse run(Long projectId, String artifactId) {
                 Project project = findProject(projectId);
-                Artifact artifact = artifactRepository.findById(artifactId)
+                Artifact artifact = artifactRepository.findWithPackageAndTenantById(artifactId)
                                 .orElseThrow(() -> new NoSuchElementException("아티팩트를 찾을 수 없습니다: " + artifactId));
 
                 CheckRun checkRun = startCheckRun(project);
@@ -84,7 +84,7 @@ public class CheckRunService {
 
         public CheckRunResponse runBatch(Long projectId, Long integrationPackageId) {
                 Project project = findProject(projectId);
-                List<Artifact> artifacts = artifactRepository.findByIntegrationPackageId(integrationPackageId);
+                List<Artifact> artifacts = artifactRepository.findWithPackageAndTenantByIntegrationPackageId(integrationPackageId);
 
                 CheckRun checkRun = startCheckRun(project);
                 try {

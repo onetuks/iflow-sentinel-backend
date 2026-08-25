@@ -126,7 +126,12 @@ class TenantServiceTest {
                 TenantPlatform.NEO,
                 TenantAuthType.OAUTH2_CLIENT_CREDENTIALS,
                 "new-client-id",
-                "new-client-secret");
+                "new-client-secret",
+                "https://new-rt.example.com",
+                "https://new.auth.example.com/oauth/token",
+                TenantAuthType.BASIC,
+                "new-interface-user",
+                "new-interface-pass");
 
         TenantResponse response = service.update(1L, request);
 
@@ -135,6 +140,10 @@ class TenantServiceTest {
         assertThat(response.tokenUrl()).isEqualTo("https://new.example.com/oauth/token");
         assertThat(response.platformType()).isEqualTo(TenantPlatform.NEO);
         assertThat(response.clientId()).isEqualTo("new-client-id");
+        assertThat(response.interfaceUrl()).isEqualTo("https://new-rt.example.com");
+        assertThat(response.interfaceTokenUrl()).isEqualTo("https://new.auth.example.com/oauth/token");
+        assertThat(response.interfaceAuthType()).isEqualTo(TenantAuthType.BASIC);
+        assertThat(response.interfaceUsername()).isEqualTo("new-interface-user");
     }
 
     @Test

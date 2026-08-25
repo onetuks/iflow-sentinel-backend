@@ -38,7 +38,7 @@ public class StorageMapping {
     private Long tenantId;
 
     @Column(name = "artifact_id", nullable = false)
-    private Long artifactId;
+    private String artifactId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "storage_type", nullable = false)
@@ -58,7 +58,7 @@ public class StorageMapping {
     private LocalDateTime updatedAt;
 
     @Builder
-    public StorageMapping(Long tenantId, Long artifactId, StorageType storageType, String storageName,
+    public StorageMapping(Long tenantId, String artifactId, StorageType storageType, String storageName,
                           Integer expireDays, ConfidenceLevel confidenceLevel, LocalDateTime updatedAt) {
         this.tenantId = tenantId;
         this.artifactId = artifactId;

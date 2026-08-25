@@ -28,7 +28,7 @@ class StorageMappingServiceTest {
     private StorageMappingRepository storageMappingRepository;
 
     private Long tenantId = 1L;
-    private Long artifactId = 100L;
+    private String artifactId = "IFLOW_TEST_01";
 
     @BeforeEach
     void setUp() {
