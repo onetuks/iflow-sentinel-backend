@@ -49,9 +49,8 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
-	jvmArgs '-Dfile.encoding=UTF-8', '-Dsun.jnu.encoding=UTF-8'
+	jvmArgs '-Dfile.encoding=UTF-8'
 	systemProperty 'file.encoding', 'UTF-8'
-	systemProperty 'sun.jnu.encoding', 'UTF-8'
 	systemProperty 'user.language', 'en'
 	systemProperty 'user.country', 'US'
 }

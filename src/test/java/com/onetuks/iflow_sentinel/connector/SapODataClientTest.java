@@ -164,7 +164,7 @@ class SapODataClientTest {
                                 .andRespond(withSuccess(
                                                 "{\"access_token\":\"tok-abc\",\"expires_in\":3600,\"token_type\":\"bearer\"}",
                                                 MediaType.APPLICATION_JSON));
-                mockServer.expect(requestTo(ODATA_URL + "/ServiceEndpoints"))
+                mockServer.expect(requestTo(ODATA_URL + "/ServiceEndpoints?$expand=EntryPoints"))
                                 .andExpect(method(HttpMethod.GET))
                                 .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer tok-abc"))
                                 .andRespond(withSuccess(
@@ -176,6 +176,128 @@ class SapODataClientTest {
                 assertThat(endpoints).hasSize(1);
                 assertThat(endpoints.get(0).Name()).isEqualTo("IFLOW_1");
                 assertThat(endpoints.get(0).Url()).isEqualTo("https://tenant.example.com/http/iflow1");
+                mockServer.verify();
+        }
+
+        @Test
+        void getServiceEndpointsByNameFetchesCollectionWithFilter() {
+                mockServer.expect(requestTo(TOKEN_URL))
+                                .andExpect(method(HttpMethod.POST))
+                                .andRespond(withSuccess(
+                                                "{\"access_token\":\"tok-abc\",\"expires_in\":3600,\"token_type\":\"bearer\"}",
+                                                MediaType.APPLICATION_JSON));
+                mockServer.expect(requestTo(ODATA_URL + "/ServiceEndpoints?$filter=Name%20eq%20'MM2110_CPIX_ERP'&$expand=EntryPoints"))
+                                .andExpect(method(HttpMethod.GET))
+                                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer tok-abc"))
+                                .andRespond(withSuccess(
+                                                """
+                                                {
+                                                    "d": {
+                                                        "results": [
+                                                            {
+                                                                "Id": "MM2110_CPIX_ERP$endpointAddress=MM2110",
+                                                                "Name": "MM2110_CPIX_ERP",
+                                                                "Protocol": "REST",
+                                                                "EntryPoints": {
+                                                                    "results": [
+                                                                        {
+                                                                            "Url": "https://nanoh2o-is-dev.it-cpi015.cfapps.ap12.hana.ondemand.com/http/MM2110",
+                                                                            "HttpMethod": "POST"
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            }
+                                                        ]
+                                                    }
+                                                }
+                                                """,
+                                                MediaType.APPLICATION_JSON));
+
+                List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> endpoints =
+                                odataClient.getServiceEndpointsByName(tenant, "MM2110_CPIX_ERP");
+
+                assertThat(endpoints).hasSize(1);
+                assertThat(endpoints.get(0).Name()).isEqualTo("MM2110_CPIX_ERP");
+                assertThat(endpoints.get(0).resolveUrl()).isEqualTo("https://nanoh2o-is-dev.it-cpi015.cfapps.ap12.hana.ondemand.com/http/MM2110");
+                mockServer.verify();
+        }
+
+        @Test
+        void getEntryPointsForServiceEndpointFetchesCollection() {
+                mockServer.expect(requestTo(TOKEN_URL))
+                                .andExpect(method(HttpMethod.POST))
+                                .andRespond(withSuccess(
+                                                "{\"access_token\":\"tok-abc\",\"expires_in\":3600,\"token_type\":\"bearer\"}",
+                                                MediaType.APPLICATION_JSON));
+                mockServer.expect(requestTo(ODATA_URL + "/ServiceEndpoints('MM2110_CPIX_ERP%24endpointAddress%3DMM2110')/EntryPoints"))
+                                .andExpect(method(HttpMethod.GET))
+                                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer tok-abc"))
+                                .andRespond(withSuccess(
+                                                """
+                                                {
+                                                    "d": {
+                                                        "results": [
+                                                            {
+                                                                "Url": "https://tenant.example.com/http/MM2110",
+                                                                "ContentType": "application/json",
+                                                                "HttpMethod": "POST"
+                                                            }
+                                                        ]
+                                                    }
+                                                }
+                                                """,
+                                                MediaType.APPLICATION_JSON));
+
+                List<com.onetuks.iflow_sentinel.reprocess.dto.SapEntryPointDto> entryPoints =
+                                odataClient.getEntryPointsForServiceEndpoint(tenant, "MM2110_CPIX_ERP$endpointAddress=MM2110");
+
+                assertThat(entryPoints).hasSize(1);
+                assertThat(entryPoints.get(0).Url()).isEqualTo("https://tenant.example.com/http/MM2110");
+                mockServer.verify();
+        }
+
+        @Test
+        void getServiceEndpointsForRuntimeArtifactFetchesCollection() {
+                mockServer.expect(requestTo(TOKEN_URL))
+                                .andExpect(method(HttpMethod.POST))
+                                .andRespond(withSuccess(
+                                                "{\"access_token\":\"tok-abc\",\"expires_in\":3600,\"token_type\":\"bearer\"}",
+                                                MediaType.APPLICATION_JSON));
+                mockServer.expect(requestTo(ODATA_URL + "/IntegrationRuntimeArtifacts('ART1')/ServiceEndpoints?$expand=EntryPoints"))
+                                .andExpect(method(HttpMethod.GET))
+                                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer tok-abc"))
+                                .andRespond(withSuccess(
+                                                "{\"d\":{\"results\":[{\"Name\":\"IFLOW_1\",\"Url\":\"https://tenant.example.com/http/iflow1\",\"Protocol\":\"HTTPS\"}]}}",
+                                                MediaType.APPLICATION_JSON));
+
+                List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> endpoints =
+                                odataClient.getServiceEndpointsForRuntimeArtifact(tenant, "ART1");
+
+                assertThat(endpoints).hasSize(1);
+                assertThat(endpoints.get(0).Url()).isEqualTo("https://tenant.example.com/http/iflow1");
+                mockServer.verify();
+        }
+
+        @Test
+        void getRuntimeArtifactsFetchesCollection() {
+                mockServer.expect(requestTo(TOKEN_URL))
+                                .andExpect(method(HttpMethod.POST))
+                                .andRespond(withSuccess(
+                                                "{\"access_token\":\"tok-abc\",\"expires_in\":3600,\"token_type\":\"bearer\"}",
+                                                MediaType.APPLICATION_JSON));
+                mockServer.expect(requestTo(ODATA_URL + "/IntegrationRuntimeArtifacts"))
+                                .andExpect(method(HttpMethod.GET))
+                                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer tok-abc"))
+                                .andRespond(withSuccess(
+                                                "{\"d\":{\"results\":[{\"Id\":\"ART1\",\"Name\":\"Art One\",\"Version\":\"1.0.0\",\"Type\":\"IFlow\",\"Status\":\"STARTED\"}]}}",
+                                                MediaType.APPLICATION_JSON));
+
+                List<com.onetuks.iflow_sentinel.connector.dto.SapRuntimeArtifactDto> artifacts =
+                                odataClient.getRuntimeArtifacts(tenant);
+
+                assertThat(artifacts).hasSize(1);
+                assertThat(artifacts.get(0).Id()).isEqualTo("ART1");
+                assertThat(artifacts.get(0).Status()).isEqualTo("STARTED");
                 mockServer.verify();
         }
 }

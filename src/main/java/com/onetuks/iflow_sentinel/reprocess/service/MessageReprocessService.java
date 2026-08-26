@@ -371,6 +371,46 @@ public class MessageReprocessService {
         // 1. DataStore 메시지 재처리 또는 페이로드가 명시된 재처리 요청: 인터페이스 직접 호출 실행
         if (request.storageType() == StorageType.DATASTORE || (request.payload() != null && !request.payload().isBlank())) {
             String targetEndpointUrl = resolveInterfaceEndpointUrl(tenant, artifact, request.endpointUrl());
+
+            // 호출 가능한 인터페이스 URL이 존재하지 않는 경우 (미배포 또는 노출 URL 없음)
+            if (targetEndpointUrl == null || targetEndpointUrl.isBlank()) {
+                String noUrlMessage = "호출 가능한 인터페이스 엔드포인트 URL을 찾을 수 없습니다. SAP에 해당 아티팩트가 배포되어 활성화되어 있는지 확인해주세요.";
+                int noUrlStatusCode = 404;
+
+                ReprocessHistory history = ReprocessHistory.builder()
+                        .tenantId(request.tenantId())
+                        .tenantName(tenant.getName())
+                        .artifactId(request.artifactId())
+                        .artifactName(artifactName)
+                        .messageId(request.messageId())
+                        .storageType(request.storageType())
+                        .storageName(request.storageName())
+                        .status(ReprocessStatus.FAILED)
+                        .statusMessage(noUrlMessage)
+                        .reprocessedAt(now)
+                        .reprocessedBy(reprocessedBy)
+                        .deepLinkUrl(deepLinkUrl)
+                        .endpointUrl(null)
+                        .httpStatusCode(noUrlStatusCode)
+                        .build();
+                ReprocessHistory savedHistory = reprocessHistoryRepository.save(history);
+
+                log.warn("인터페이스 엔드포인트 URL 미존재로 재처리 실패 처리 - messageId: {}, artifactId: {}",
+                        request.messageId(), request.artifactId());
+
+                return new MessageReprocessResult(
+                        savedHistory.getId(),
+                        request.messageId(),
+                        false,
+                        noUrlMessage,
+                        request.storageType().name(),
+                        request.storageName(),
+                        now,
+                        deepLinkUrl,
+                        null,
+                        noUrlStatusCode);
+            }
+
             try {
                 // 페이로드 확보
                 String payload = request.payload();
@@ -518,47 +558,132 @@ public class MessageReprocessService {
     /**
      * iFlow 인터페이스의 호출 엔드포인트 URL을 탐색한다.
      * 1) 요청에 직접 전달된 endpointUrl
-     * 2) SAP OData /ServiceEndpoints API 조회 매칭
-     * 3) 테넌트 호스트 URL 기반 기본 엔드포인트 fallback
+     * 2) SAP OData /ServiceEndpoints?$filter=Name eq '{name}'&$expand=EntryPoints 직접 조회 (1순위)
+     * 3) SAP OData /IntegrationRuntimeArtifacts('{sapArtifactId}')/ServiceEndpoints 직접 조회 (2순위)
+     * 4) SAP OData 전체 /ServiceEndpoints 목록 조회 매칭 (3순위)
+     * 5) SAP OData 배포된 런타임 아티팩트 목록(/IntegrationRuntimeArtifacts) 탐색 후 해당 엔드포인트 조회 (4순위)
+     * 6) 탐색 실패 시 임의 가상 URL을 생성하지 않고 null 반환
      */
     public String resolveInterfaceEndpointUrl(Tenant tenant, Artifact artifact, String requestedEndpointUrl) {
         if (requestedEndpointUrl != null && !requestedEndpointUrl.isBlank()) {
             return requestedEndpointUrl.trim();
         }
 
-        if (artifact != null) {
-            String artName = artifact.getName();
-            String sapArtId = artifact.getSapArtifactId();
+        if (artifact == null) {
+            return null;
+        }
 
+        String sapArtId = artifact.getSapArtifactId();
+        String artName = artifact.getName();
+
+        // 1. /ServiceEndpoints?$filter=Name eq '{name}'&$expand=EntryPoints 직접 조회 (1순위: artName 및 sapArtId)
+        List<String> candidateNames = new java.util.ArrayList<>();
+        if (artName != null && !artName.isBlank()) {
+            candidateNames.add(artName);
+        }
+        if (sapArtId != null && !sapArtId.isBlank() && !sapArtId.equalsIgnoreCase(artName)) {
+            candidateNames.add(sapArtId);
+        }
+
+        for (String candidateName : candidateNames) {
             try {
-                List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> endpoints =
-                        sapODataClient.getServiceEndpoints(tenant);
-                if (endpoints != null && !endpoints.isEmpty()) {
-                    for (var ep : endpoints) {
-                        if (ep.Url() == null || ep.Url().isBlank()) {
-                            continue;
+                List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> filteredEndpoints =
+                        sapODataClient.getServiceEndpointsByName(tenant, candidateName);
+                if (filteredEndpoints != null && !filteredEndpoints.isEmpty()) {
+                    for (var ep : filteredEndpoints) {
+                        String resolvedUrl = ep.resolveUrl();
+                        if (resolvedUrl != null && !resolvedUrl.isBlank()) {
+                            log.info("ServiceEndpoints 필터 조회($filter=Name eq '{}')를 통해 URL 확보 성공: {}", candidateName, resolvedUrl);
+                            return resolvedUrl;
                         }
-                        if (ep.Name() != null) {
-                            if (ep.Name().equalsIgnoreCase(artName) || ep.Name().equalsIgnoreCase(sapArtId)
-                                    || (sapArtId != null && ep.Name().contains(sapArtId))
-                                    || (artName != null && ep.Name().contains(artName))) {
-                                return ep.Url();
+                        // EntryPoints 별도 호출 폴백
+                        if (ep.Id() != null && !ep.Id().isBlank()) {
+                            var entryPoints = sapODataClient.getEntryPointsForServiceEndpoint(tenant, ep.Id());
+                            if (entryPoints != null && !entryPoints.isEmpty()) {
+                                for (var entryPoint : entryPoints) {
+                                    if (entryPoint.Url() != null && !entryPoint.Url().isBlank()) {
+                                        log.info("ServiceEndpoints EntryPoints 조회를 통해 URL 확보 성공: {}", entryPoint.Url());
+                                        return entryPoint.Url().trim();
+                                    }
+                                }
                             }
                         }
                     }
                 }
             } catch (Exception e) {
-                log.warn("SAP ServiceEndpoints 조회 중 오류 발생 (Fallback 사용): {}", e.getMessage());
-            }
-
-            // Fallback: /http/{sapArtifactId}
-            String pathIdentifier = (sapArtId != null && !sapArtId.isBlank()) ? sapArtId : artName;
-            if (pathIdentifier != null && !pathIdentifier.isBlank()) {
-                return "/http/" + pathIdentifier;
+                log.debug("ServiceEndpoints Name 필터({}) 조회 실패: {}", candidateName, e.getMessage());
             }
         }
 
-        return "/http/reprocess";
+        // 2. 배포된 런타임 아티팩트에서 직접 ServiceEndpoints 조회 시도 (2순위: sapArtifactId)
+        if (sapArtId != null && !sapArtId.isBlank()) {
+            try {
+                List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> runtimeEndpoints =
+                        sapODataClient.getServiceEndpointsForRuntimeArtifact(tenant, sapArtId);
+                if (runtimeEndpoints != null && !runtimeEndpoints.isEmpty()) {
+                    for (var ep : runtimeEndpoints) {
+                        String resolvedUrl = ep.resolveUrl();
+                        if (resolvedUrl != null && !resolvedUrl.isBlank()) {
+                            return resolvedUrl;
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.debug("특정 Runtime Artifact ID({}) 기반 ServiceEndpoints 조회 실패 (전체 목록 탐색 진행): {}", sapArtId, e.getMessage());
+            }
+        }
+
+        // 3. 전체 배포된 ServiceEndpoints 목록을 조회하여 이름/ID 매칭 탐색 (3순위)
+        try {
+            List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> endpoints =
+                    sapODataClient.getServiceEndpoints(tenant);
+            if (endpoints != null && !endpoints.isEmpty()) {
+                for (var ep : endpoints) {
+                    if (ep.Name() != null) {
+                        if (ep.Name().equalsIgnoreCase(sapArtId) || ep.Name().equalsIgnoreCase(artName)
+                                || (sapArtId != null && ep.Name().contains(sapArtId))
+                                || (artName != null && ep.Name().contains(artName))) {
+                            String resolvedUrl = ep.resolveUrl();
+                            if (resolvedUrl != null && !resolvedUrl.isBlank()) {
+                                return resolvedUrl;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("SAP 전체 ServiceEndpoints 목록 조회 실패: {}", e.getMessage());
+        }
+
+        // 4. 배포된 런타임 아티팩트 목록(/IntegrationRuntimeArtifacts)에서 이름으로 매칭 후 해당 ID로 조회 시도 (4순위)
+        try {
+            List<com.onetuks.iflow_sentinel.connector.dto.SapRuntimeArtifactDto> runtimeArtifacts =
+                    sapODataClient.getRuntimeArtifacts(tenant);
+            if (runtimeArtifacts != null) {
+                for (var rArt : runtimeArtifacts) {
+                    if ((sapArtId != null && sapArtId.equalsIgnoreCase(rArt.Id()))
+                            || (artName != null && artName.equalsIgnoreCase(rArt.Name()))
+                            || (sapArtId != null && rArt.Id() != null && rArt.Id().contains(sapArtId))
+                            || (artName != null && rArt.Name() != null && rArt.Name().contains(artName))) {
+                        List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> epList =
+                                sapODataClient.getServiceEndpointsForRuntimeArtifact(tenant, rArt.Id());
+                        if (epList != null && !epList.isEmpty()) {
+                            for (var ep : epList) {
+                                String resolvedUrl = ep.resolveUrl();
+                                if (resolvedUrl != null && !resolvedUrl.isBlank()) {
+                                    return resolvedUrl;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("배포된 Runtime Artifact 탐색 및 ServiceEndpoints 조회 실패: {}", e.getMessage());
+        }
+
+        // 5. 어떤 방법으로도 런타임 엔드포인트를 찾을 수 없는 경우 null 반환
+        return null;
     }
 
     private String determineContentType(String payload) {

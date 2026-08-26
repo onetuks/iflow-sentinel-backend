@@ -319,10 +319,87 @@ public class SapODataClient {
     }
 
     /**
+     * 특정 아티팩트명(Name)에 해당하는 SAP CPI 배포된 ServiceEndpoints 목록 조회 API
+     * GET /api/v1/ServiceEndpoints?$filter=Name eq '{name}'&$expand=EntryPoints
+     */
+    public List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> getServiceEndpointsByName(Tenant tenant,
+            String name) {
+        if (name == null || name.isBlank()) {
+            return List.of();
+        }
+        // 1차 시도: $filter + $expand=EntryPoints
+        try {
+            String path = "/ServiceEndpoints?$filter=Name eq '" + name.trim() + "'&$expand=EntryPoints";
+            List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> endpoints = getCollection(
+                    tenant,
+                    path,
+                    new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto>>() {
+                    });
+            if (endpoints != null && !endpoints.isEmpty()) {
+                return endpoints;
+            }
+        } catch (Exception e) {
+            log.debug("ServiceEndpoints($filter + $expand) 조회 실패 (Name={}): {}. $filter 단독 쿼리 시도.", name,
+                    e.getMessage());
+        }
+
+        // 2차 시도: $filter 단독
+        try {
+            String path = "/ServiceEndpoints?$filter=Name eq '" + name.trim() + "'";
+            return getCollection(
+                    tenant,
+                    path,
+                    new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto>>() {
+                    });
+        } catch (Exception e) {
+            log.warn("ServiceEndpoints($filter) 조회 실패 (Name={}): {}", name, e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * 특정 ServiceEndpoint의 EntryPoints 목록 조회 API
+     * GET /api/v1/ServiceEndpoints('{serviceEndpointId}')/EntryPoints
+     */
+    public List<com.onetuks.iflow_sentinel.reprocess.dto.SapEntryPointDto> getEntryPointsForServiceEndpoint(
+            Tenant tenant, String serviceEndpointId) {
+        if (serviceEndpointId == null || serviceEndpointId.isBlank()) {
+            return List.of();
+        }
+        try {
+            String encodedId = java.net.URLEncoder
+                    .encode(serviceEndpointId, java.nio.charset.StandardCharsets.UTF_8)
+                    .replace("+", "%20");
+            String path = "/ServiceEndpoints('" + encodedId + "')/EntryPoints";
+            return getCollection(
+                    tenant,
+                    path,
+                    new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapEntryPointDto>>() {
+                    });
+        } catch (Exception e) {
+            log.debug("ServiceEndpoints('{Id}')/EntryPoints 조회 실패 (Id={}): {}", serviceEndpointId, e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
      * SAP CPI 배포된 ServiceEndpoints 목록 조회 API
      * GET /api/v1/ServiceEndpoints
      */
     public List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> getServiceEndpoints(Tenant tenant) {
+        try {
+            List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> endpoints = getCollection(
+                    tenant,
+                    "/ServiceEndpoints?$expand=EntryPoints",
+                    new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto>>() {
+                    });
+            if (endpoints != null && !endpoints.isEmpty()) {
+                return endpoints;
+            }
+        } catch (Exception e) {
+            log.debug("SAP ServiceEndpoints($expand) 조회 실패: {}. 일반 조회 시도.", e.getMessage());
+        }
+
         try {
             return getCollection(
                     tenant,
@@ -331,6 +408,55 @@ public class SapODataClient {
                     });
         } catch (Exception e) {
             log.warn("SAP ServiceEndpoints 목록 조회 실패: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * 특정 런타임 아티팩트의 배포된 ServiceEndpoints 목록 조회 API
+     * GET /api/v1/IntegrationRuntimeArtifacts('{id}')/ServiceEndpoints
+     */
+    public List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> getServiceEndpointsForRuntimeArtifact(
+            Tenant tenant, String runtimeArtifactId) {
+        try {
+            List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> endpoints = getCollection(
+                    tenant,
+                    "/IntegrationRuntimeArtifacts('" + runtimeArtifactId + "')/ServiceEndpoints?$expand=EntryPoints",
+                    new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto>>() {
+                    });
+            if (endpoints != null && !endpoints.isEmpty()) {
+                return endpoints;
+            }
+        } catch (Exception e) {
+            log.debug("특정 Runtime Artifact({}) ServiceEndpoints($expand) 조회 실패: {}. 일반 조회 시도.", runtimeArtifactId,
+                    e.getMessage());
+        }
+
+        try {
+            return getCollection(
+                    tenant,
+                    "/IntegrationRuntimeArtifacts('" + runtimeArtifactId + "')/ServiceEndpoints",
+                    new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto>>() {
+                    });
+        } catch (Exception e) {
+            log.debug("특정 Runtime Artifact({}) ServiceEndpoints 목록 조회 실패: {}", runtimeArtifactId, e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * 배포된 런타임 아티팩트 목록 조회 API
+     * GET /api/v1/IntegrationRuntimeArtifacts
+     */
+    public List<com.onetuks.iflow_sentinel.connector.dto.SapRuntimeArtifactDto> getRuntimeArtifacts(Tenant tenant) {
+        try {
+            return getCollection(
+                    tenant,
+                    "/IntegrationRuntimeArtifacts",
+                    new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.connector.dto.SapRuntimeArtifactDto>>() {
+                    });
+        } catch (Exception e) {
+            log.warn("SAP IntegrationRuntimeArtifacts 목록 조회 실패: {}", e.getMessage());
             return List.of();
         }
     }

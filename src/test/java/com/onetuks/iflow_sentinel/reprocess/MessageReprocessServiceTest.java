@@ -64,6 +64,7 @@ class MessageReprocessServiceTest {
                 .authType(com.onetuks.iflow_sentinel.connector.domain.tenant.TenantAuthType.OAUTH2_CLIENT_CREDENTIALS)
                 .clientId("client-id")
                 .clientSecret("client-secret")
+                .interfaceUrl("https://test-rt.cfapps.eu10.hana.ondemand.com")
                 .interfaceAuthType(com.onetuks.iflow_sentinel.connector.domain.tenant.TenantAuthType.BASIC)
                 .interfaceUsername("iflow-user")
                 .interfacePassword("iflow-pass")
@@ -150,10 +151,32 @@ class MessageReprocessServiceTest {
     }
 
     @Test
-    @DisplayName("DataStore 메시지 재처리 실패 시 FAILED 상태로 히스토리가 기록되고 실패 결과가 반환된다")
-    void reprocessMessage_datastore_fail() {
+    @DisplayName("DataStore 메시지 재처리 시 런타임 엔드포인트 URL을 찾지 못하면 404 실패 결과와 안내 메시지를 반환한다")
+    void reprocessMessage_datastore_no_endpoint_url() {
         MessageReprocessRequest request = new MessageReprocessRequest(
-                tenant.getId(), artifact.getId(), "MSG_DS_UNKNOWN", StorageType.DATASTORE, "DS_TEST", "TEST_USER"
+                tenant.getId(), artifact.getId(), "MSG_DS_NO_URL", StorageType.DATASTORE, "DS_TEST", "TEST_USER"
+        );
+
+        MessageReprocessResult result = messageReprocessService.reprocessMessage(request);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.historyId()).isNotNull();
+        assertThat(result.httpStatusCode()).isEqualTo(404);
+        assertThat(result.statusMessage()).contains("호출 가능한 인터페이스 엔드포인트 URL을 찾을 수 없습니다");
+
+        // 히스토리 조회
+        ReprocessHistoryResponse history = messageReprocessService.getReprocessHistory(result.historyId());
+        assertThat(history.status()).isEqualTo(ReprocessStatus.FAILED);
+        assertThat(history.httpStatusCode()).isEqualTo(404);
+        assertThat(history.statusMessage()).contains("호출 가능한 인터페이스 엔드포인트 URL을 찾을 수 없습니다");
+    }
+
+    @Test
+    @DisplayName("DataStore 메시지 재처리 시 엔드포인트 URL이 명시되었으나 호출 실패 시 FAILED 상태로 히스토리가 기록된다")
+    void reprocessMessage_datastore_explicit_url_fail() {
+        MessageReprocessRequest request = new MessageReprocessRequest(
+                tenant.getId(), artifact.getId(), "MSG_DS_UNKNOWN", StorageType.DATASTORE, "DS_TEST", "TEST_USER",
+                "{\"sample\":\"payload\"}", "https://invalid.endpoint.url/api"
         );
 
         MessageReprocessResult result = messageReprocessService.reprocessMessage(request);
@@ -176,13 +199,13 @@ class MessageReprocessServiceTest {
         String resolved1 = messageReprocessService.resolveInterfaceEndpointUrl(tenant, artifact, customUrl);
         assertThat(resolved1).isEqualTo(customUrl);
 
-        // 2. 아티팩트 ID 기반 Fallback
+        // 2. 배포된 아티팩트 엔드포인트가 없는 경우 null 반환
         String resolved2 = messageReprocessService.resolveInterfaceEndpointUrl(tenant, artifact, null);
-        assertThat(resolved2).isEqualTo("/http/iflow_test");
+        assertThat(resolved2).isNull();
 
-        // 3. 아티팩트 정보가 없는 경우 기본 Fallback
+        // 3. 아티팩트 정보가 없는 경우 null 반환
         String resolved3 = messageReprocessService.resolveInterfaceEndpointUrl(tenant, null, null);
-        assertThat(resolved3).isEqualTo("/http/reprocess");
+        assertThat(resolved3).isNull();
     }
 
     @Test
