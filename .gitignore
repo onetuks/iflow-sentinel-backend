@@ -6,6 +6,7 @@ build/
 !**/src/test/**/build/
 
 .vscode/
+*.log
 
 ### STS ###
 .apt_generated
