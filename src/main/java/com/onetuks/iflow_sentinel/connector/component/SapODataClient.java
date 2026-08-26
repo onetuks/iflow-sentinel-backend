@@ -1,10 +1,14 @@
 package com.onetuks.iflow_sentinel.connector.component;
 
 import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
+import com.onetuks.iflow_sentinel.connector.domain.tenant.TenantAuthType;
 import com.onetuks.iflow_sentinel.connector.dto.ODataCollectionResponse;
 import com.onetuks.iflow_sentinel.connector.dto.ODataEntityResponse;
+import com.onetuks.iflow_sentinel.connector.dto.SapRuntimeArtifactDto;
 import com.onetuks.iflow_sentinel.exception.ConnectorException;
-
+import com.onetuks.iflow_sentinel.reprocess.dto.SapEntryPointDto;
+import com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto;
+import com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.ParameterizedTypeReference;
@@ -17,7 +21,15 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
+import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Base64;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
@@ -70,8 +82,8 @@ public class SapODataClient {
      * 일치하는 첫 엔트리를 찾는다. DataStoreEntries처럼 {@code $filter}가 지원되지 않는 프로퍼티로
      * 검색해야 할 때 사용한다. 일치 항목을 찾으면 즉시 반환하고 더 이상 페이지를 조회하지 않는다.
      */
-    public <T> java.util.Optional<T> findInCollection(Tenant tenant, String relativePath,
-            ParameterizedTypeReference<ODataCollectionResponse<T>> typeRef, java.util.function.Predicate<T> predicate) {
+    public <T> Optional<T> findInCollection(Tenant tenant, String relativePath,
+            ParameterizedTypeReference<ODataCollectionResponse<T>> typeRef, Predicate<T> predicate) {
         String token = tokenProvider.getAccessToken(tenant);
         String url = buildUrl(tenant.getOdataUrl(), relativePath);
         int pagesFetched = 0;
@@ -81,7 +93,7 @@ public class SapODataClient {
             ODataCollectionResponse<T> response;
             try {
                 response = restClient.get()
-                        .uri(java.net.URI.create(url))
+                        .uri(URI.create(url))
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                         .accept(MediaType.APPLICATION_JSON)
                         .retrieve()
@@ -104,11 +116,11 @@ public class SapODataClient {
             }
             if (response == null || response.d() == null) {
                 log.warn("[OUTBOUND SAP OData] GET (Paginated, page {}) 응답 또는 d 데이터가 null입니다.", pagesFetched);
-                return java.util.Optional.empty();
+                return Optional.empty();
             }
             List<T> results = response.d().results() != null ? response.d().results() : List.of();
             log.info("[OUTBOUND SAP OData] GET (Paginated, page {}) 수신 건수: {}건", pagesFetched, results.size());
-            java.util.Optional<T> match = results.stream().filter(predicate).findFirst();
+            Optional<T> match = results.stream().filter(predicate).findFirst();
             if (match.isPresent()) {
                 log.info("[OUTBOUND SAP OData] GET (Paginated) 조건 매칭 성공 - 페이지 {}", pagesFetched);
                 return match;
@@ -119,7 +131,7 @@ public class SapODataClient {
                     : buildUrl(tenant.getOdataUrl(), next);
         }
         log.warn("[OUTBOUND SAP OData] GET (Paginated) 총 {}페이지 검색 완료 후 조건 일치 항목을 찾지 못함", pagesFetched);
-        return java.util.Optional.empty();
+        return Optional.empty();
     }
 
     public <T> T getEntity(Tenant tenant, String relativePath,
@@ -156,7 +168,7 @@ public class SapODataClient {
         log.info("[OUTBOUND SAP OData] GET (Binary) {}", fullUrl);
         try {
             byte[] body = restClient.get()
-                    .uri(java.net.URI.create(fullUrl))
+                    .uri(URI.create(fullUrl))
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                     .retrieve()
                     .body(byte[].class);
@@ -193,7 +205,7 @@ public class SapODataClient {
         log.info("[OUTBOUND SAP OData] {} {}", method, fullUrl);
         try {
             restClient.method(method)
-                    .uri(java.net.URI.create(fullUrl))
+                    .uri(URI.create(fullUrl))
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                     .header("X-CSRF-Token", csrf.token())
                     .header(HttpHeaders.COOKIE, csrf.cookie())
@@ -237,14 +249,13 @@ public class SapODataClient {
         }
     }
 
-    public List<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto> getMplFailures(Tenant tenant,
-            String sapArtifactId, int top) {
+    public List<SapMplLogDto> getMplFailures(Tenant tenant, String sapArtifactId, int top) {
         int fetchLimit = top > 0 ? Math.max(top * 3, 100) : 100;
 
         // 7일 전 타임스탬프 계산 (ISO-8601 OData V2 datetime 포맷)
-        java.time.LocalDateTime oneWeekAgo = java.time.LocalDateTime.now().minusDays(7);
+        LocalDateTime oneWeekAgo = LocalDateTime.now().minusDays(7);
         String dateFilterStr = "LogStart ge datetime'"
-                + oneWeekAgo.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")) + "'";
+                + oneWeekAgo.format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")) + "'";
 
         // 1차 시도: 아티팩트 ID/Name + 7일 전 타임스탬프 필터 ($expand 사용 금지: 501 에러 방지)
         if (sapArtifactId != null && !sapArtifactId.isBlank()) {
@@ -254,9 +265,9 @@ public class SapODataClient {
                         "' or IntegrationArtifact/Name eq '" + sapArtifactId +
                         "' or IntegrationFlowName eq '" + sapArtifactId + "')" +
                         "&$top=" + fetchLimit + "&$orderby=LogStart desc";
-                List<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto> logs = getCollection(
+                List<SapMplLogDto> logs = getCollection(
                         tenant, path1,
-                        new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto>>() {
+                        new ParameterizedTypeReference<ODataCollectionResponse<SapMplLogDto>>() {
                         });
                 if (logs != null && !logs.isEmpty()) {
                     return logs;
@@ -272,9 +283,9 @@ public class SapODataClient {
             String path2 = "/MessageProcessingLogs?$filter=" + dateFilterStr +
                     " and (Status eq 'FAILED' or Status eq 'ESCALATED' or Status eq 'CANCELLED')" +
                     "&$top=" + fetchLimit + "&$orderby=LogStart desc";
-            List<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto> logs = getCollection(
+            List<SapMplLogDto> logs = getCollection(
                     tenant, path2,
-                    new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto>>() {
+                    new ParameterizedTypeReference<ODataCollectionResponse<SapMplLogDto>>() {
                     });
             if (logs != null && !logs.isEmpty()) {
                 return logs;
@@ -289,7 +300,7 @@ public class SapODataClient {
                     + "&$orderby=LogStart desc";
             return getCollection(
                     tenant, path3,
-                    new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto>>() {
+                    new ParameterizedTypeReference<ODataCollectionResponse<SapMplLogDto>>() {
                     });
         } catch (Exception e3) {
             log.warn("3차 OData 최신 로그 수집 쿼리 시도 실패: {}", e3.getMessage());
@@ -309,7 +320,7 @@ public class SapODataClient {
             String relativePath = "/MessageProcessingLogErrorInformations('" + messageGuid + "')/$value";
             byte[] rawBytes = getBinary(tenant, relativePath);
             if (rawBytes != null && rawBytes.length > 0) {
-                return new String(rawBytes, java.nio.charset.StandardCharsets.UTF_8);
+                return new String(rawBytes, StandardCharsets.UTF_8);
             }
         } catch (Exception e) {
             log.debug("MessageProcessingLogErrorInformations 평문 조회 실패 (MessageGuid={}): {}", messageGuid,
@@ -322,18 +333,17 @@ public class SapODataClient {
      * 특정 아티팩트명(Name)에 해당하는 SAP CPI 배포된 ServiceEndpoints 목록 조회 API
      * GET /api/v1/ServiceEndpoints?$filter=Name eq '{name}'&$expand=EntryPoints
      */
-    public List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> getServiceEndpointsByName(Tenant tenant,
-            String name) {
+    public List<SapServiceEndpointDto> getServiceEndpointsByName(Tenant tenant, String name) {
         if (name == null || name.isBlank()) {
             return List.of();
         }
         // 1차 시도: $filter + $expand=EntryPoints
         try {
             String path = "/ServiceEndpoints?$filter=Name eq '" + name.trim() + "'&$expand=EntryPoints";
-            List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> endpoints = getCollection(
+            List<SapServiceEndpointDto> endpoints = getCollection(
                     tenant,
                     path,
-                    new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto>>() {
+                    new ParameterizedTypeReference<ODataCollectionResponse<SapServiceEndpointDto>>() {
                     });
             if (endpoints != null && !endpoints.isEmpty()) {
                 return endpoints;
@@ -349,7 +359,7 @@ public class SapODataClient {
             return getCollection(
                     tenant,
                     path,
-                    new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto>>() {
+                    new ParameterizedTypeReference<ODataCollectionResponse<SapServiceEndpointDto>>() {
                     });
         } catch (Exception e) {
             log.warn("ServiceEndpoints($filter) 조회 실패 (Name={}): {}", name, e.getMessage());
@@ -361,20 +371,18 @@ public class SapODataClient {
      * 특정 ServiceEndpoint의 EntryPoints 목록 조회 API
      * GET /api/v1/ServiceEndpoints('{serviceEndpointId}')/EntryPoints
      */
-    public List<com.onetuks.iflow_sentinel.reprocess.dto.SapEntryPointDto> getEntryPointsForServiceEndpoint(
-            Tenant tenant, String serviceEndpointId) {
+    public List<SapEntryPointDto> getEntryPointsForServiceEndpoint(Tenant tenant, String serviceEndpointId) {
         if (serviceEndpointId == null || serviceEndpointId.isBlank()) {
             return List.of();
         }
         try {
-            String encodedId = java.net.URLEncoder
-                    .encode(serviceEndpointId, java.nio.charset.StandardCharsets.UTF_8)
+            String encodedId = URLEncoder.encode(serviceEndpointId, StandardCharsets.UTF_8)
                     .replace("+", "%20");
             String path = "/ServiceEndpoints('" + encodedId + "')/EntryPoints";
             return getCollection(
                     tenant,
                     path,
-                    new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapEntryPointDto>>() {
+                    new ParameterizedTypeReference<ODataCollectionResponse<SapEntryPointDto>>() {
                     });
         } catch (Exception e) {
             log.debug("ServiceEndpoints('{Id}')/EntryPoints 조회 실패 (Id={}): {}", serviceEndpointId, e.getMessage());
@@ -386,12 +394,12 @@ public class SapODataClient {
      * SAP CPI 배포된 ServiceEndpoints 목록 조회 API
      * GET /api/v1/ServiceEndpoints
      */
-    public List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> getServiceEndpoints(Tenant tenant) {
+    public List<SapServiceEndpointDto> getServiceEndpoints(Tenant tenant) {
         try {
-            List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> endpoints = getCollection(
+            List<SapServiceEndpointDto> endpoints = getCollection(
                     tenant,
                     "/ServiceEndpoints?$expand=EntryPoints",
-                    new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto>>() {
+                    new ParameterizedTypeReference<ODataCollectionResponse<SapServiceEndpointDto>>() {
                     });
             if (endpoints != null && !endpoints.isEmpty()) {
                 return endpoints;
@@ -404,7 +412,7 @@ public class SapODataClient {
             return getCollection(
                     tenant,
                     "/ServiceEndpoints",
-                    new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto>>() {
+                    new ParameterizedTypeReference<ODataCollectionResponse<SapServiceEndpointDto>>() {
                     });
         } catch (Exception e) {
             log.warn("SAP ServiceEndpoints 목록 조회 실패: {}", e.getMessage());
@@ -416,13 +424,12 @@ public class SapODataClient {
      * 특정 런타임 아티팩트의 배포된 ServiceEndpoints 목록 조회 API
      * GET /api/v1/IntegrationRuntimeArtifacts('{id}')/ServiceEndpoints
      */
-    public List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> getServiceEndpointsForRuntimeArtifact(
-            Tenant tenant, String runtimeArtifactId) {
+    public List<SapServiceEndpointDto> getServiceEndpointsForRuntimeArtifact(Tenant tenant, String runtimeArtifactId) {
         try {
-            List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> endpoints = getCollection(
+            List<SapServiceEndpointDto> endpoints = getCollection(
                     tenant,
                     "/IntegrationRuntimeArtifacts('" + runtimeArtifactId + "')/ServiceEndpoints?$expand=EntryPoints",
-                    new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto>>() {
+                    new ParameterizedTypeReference<ODataCollectionResponse<SapServiceEndpointDto>>() {
                     });
             if (endpoints != null && !endpoints.isEmpty()) {
                 return endpoints;
@@ -436,7 +443,7 @@ public class SapODataClient {
             return getCollection(
                     tenant,
                     "/IntegrationRuntimeArtifacts('" + runtimeArtifactId + "')/ServiceEndpoints",
-                    new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto>>() {
+                    new ParameterizedTypeReference<ODataCollectionResponse<SapServiceEndpointDto>>() {
                     });
         } catch (Exception e) {
             log.debug("특정 Runtime Artifact({}) ServiceEndpoints 목록 조회 실패: {}", runtimeArtifactId, e.getMessage());
@@ -448,12 +455,12 @@ public class SapODataClient {
      * 배포된 런타임 아티팩트 목록 조회 API
      * GET /api/v1/IntegrationRuntimeArtifacts
      */
-    public List<com.onetuks.iflow_sentinel.connector.dto.SapRuntimeArtifactDto> getRuntimeArtifacts(Tenant tenant) {
+    public List<SapRuntimeArtifactDto> getRuntimeArtifacts(Tenant tenant) {
         try {
             return getCollection(
                     tenant,
                     "/IntegrationRuntimeArtifacts",
-                    new ParameterizedTypeReference<ODataCollectionResponse<com.onetuks.iflow_sentinel.connector.dto.SapRuntimeArtifactDto>>() {
+                    new ParameterizedTypeReference<ODataCollectionResponse<SapRuntimeArtifactDto>>() {
                     });
         } catch (Exception e) {
             log.warn("SAP IntegrationRuntimeArtifacts 목록 조회 실패: {}", e.getMessage());
@@ -468,13 +475,13 @@ public class SapODataClient {
     public ResponseEntity<String> callInterfaceEndpoint(Tenant tenant, String targetUrl, String payload,
             String contentType) {
         String authHeader;
-        if (tenant.getInterfaceAuthType() == com.onetuks.iflow_sentinel.connector.domain.tenant.TenantAuthType.BASIC
+        if (tenant.getInterfaceAuthType() == TenantAuthType.BASIC
                 || (tenant.getInterfaceUsername() != null && !tenant.getInterfaceUsername().isBlank())) {
             String username = tenant.getInterfaceUsername() != null ? tenant.getInterfaceUsername() : "";
             String password = tenant.getInterfacePassword() != null ? tenant.getInterfacePassword() : "";
             String authString = username + ":" + password;
-            authHeader = "Basic " + java.util.Base64.getEncoder()
-                    .encodeToString(authString.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            authHeader = "Basic " + Base64.getEncoder()
+                    .encodeToString(authString.getBytes(StandardCharsets.UTF_8));
         } else {
             String token = tokenProvider.getAccessToken(tenant);
             authHeader = "Bearer " + token;
@@ -512,7 +519,7 @@ public class SapODataClient {
 
         try {
             return restClient.post()
-                    .uri(java.net.URI.create(fullUrl))
+                    .uri(URI.create(fullUrl))
                     .header(HttpHeaders.AUTHORIZATION, authHeader)
                     .contentType(mediaType)
                     .body(payload != null ? payload : "")

@@ -7,12 +7,17 @@ import com.onetuks.iflow_sentinel.connector.domain.project.ProjectRepository;
 import com.onetuks.iflow_sentinel.connector.service.ArtifactDownloadService;
 import com.onetuks.iflow_sentinel.parser.ParserFacade;
 import com.onetuks.iflow_sentinel.parser.model.ParsedModel;
+import com.onetuks.iflow_sentinel.parser.util.ReprocessSupportCalculator;
 import com.onetuks.iflow_sentinel.report.domain.checkrun.CheckRun;
 import com.onetuks.iflow_sentinel.report.domain.checkrun.CheckRunRepository;
 import com.onetuks.iflow_sentinel.report.domain.checkrun.CheckRunStatus;
 import com.onetuks.iflow_sentinel.report.domain.finding.Finding;
 import com.onetuks.iflow_sentinel.report.domain.finding.FindingRepository;
 import com.onetuks.iflow_sentinel.report.dto.CheckRunResponse;
+import com.onetuks.iflow_sentinel.reprocess.domain.ConfidenceLevel;
+import com.onetuks.iflow_sentinel.reprocess.domain.ReprocessSupportType;
+import com.onetuks.iflow_sentinel.reprocess.domain.StorageType;
+import com.onetuks.iflow_sentinel.reprocess.service.StorageMappingService;
 import com.onetuks.iflow_sentinel.rule.domain.Severity;
 import com.onetuks.iflow_sentinel.ruleengine.ArtifactParsedModel;
 import com.onetuks.iflow_sentinel.ruleengine.EffectiveRule;
@@ -45,7 +50,7 @@ public class CheckRunService {
         private final ParserFacade parserFacade;
         private final RuleResolutionService ruleResolutionService;
         private final RuleEngine ruleEngine;
-        private final com.onetuks.iflow_sentinel.reprocess.service.StorageMappingService storageMappingService;
+        private final StorageMappingService storageMappingService;
 
         public CheckRunService(
                         ProjectRepository projectRepository,
@@ -56,7 +61,7 @@ public class CheckRunService {
                         ParserFacade parserFacade,
                         RuleResolutionService ruleResolutionService,
                         RuleEngine ruleEngine,
-                        com.onetuks.iflow_sentinel.reprocess.service.StorageMappingService storageMappingService) {
+                        StorageMappingService storageMappingService) {
                 this.projectRepository = projectRepository;
                 this.artifactRepository = artifactRepository;
                 this.checkRunRepository = checkRunRepository;
@@ -127,8 +132,8 @@ public class CheckRunService {
                 ParsedModel parsedModel = parserFacade.parse(zipBytes);
 
                 if (parsedModel != null && parsedModel.iflow() != null) {
-                        com.onetuks.iflow_sentinel.reprocess.domain.ReprocessSupportType supportType =
-                                        com.onetuks.iflow_sentinel.parser.util.ReprocessSupportCalculator.calculateSupportType(parsedModel.iflow());
+                        ReprocessSupportType supportType =
+                                        ReprocessSupportCalculator.calculateSupportType(parsedModel.iflow());
                         artifact.updateReprocessSupportType(supportType);
                         artifactRepository.save(artifact);
 
@@ -137,19 +142,19 @@ public class CheckRunService {
                                         : null;
 
                         if (tenantId != null) {
-                                com.onetuks.iflow_sentinel.parser.util.ReprocessSupportCalculator.extractDataStoreInfo(parsedModel.iflow())
+                                ReprocessSupportCalculator.extractDataStoreInfo(parsedModel.iflow())
                                                 .ifPresent(info -> storageMappingService.saveOrUpdateMapping(
                                                                 tenantId, artifact.getId(),
-                                                                com.onetuks.iflow_sentinel.reprocess.domain.StorageType.DATASTORE,
+                                                                StorageType.DATASTORE,
                                                                 info.name(), info.expireDays(),
-                                                                com.onetuks.iflow_sentinel.reprocess.domain.ConfidenceLevel.AUTO_PARSED));
+                                                                ConfidenceLevel.AUTO_PARSED));
 
-                                com.onetuks.iflow_sentinel.parser.util.ReprocessSupportCalculator.extractJmsQueueName(parsedModel.iflow())
+                                ReprocessSupportCalculator.extractJmsQueueName(parsedModel.iflow())
                                                 .ifPresent(queueName -> storageMappingService.saveOrUpdateMapping(
                                                                 tenantId, artifact.getId(),
-                                                                com.onetuks.iflow_sentinel.reprocess.domain.StorageType.JMS,
+                                                                StorageType.JMS,
                                                                 queueName, null,
-                                                                com.onetuks.iflow_sentinel.reprocess.domain.ConfidenceLevel.AUTO_PARSED));
+                                                                ConfidenceLevel.AUTO_PARSED));
                         }
                 }
 

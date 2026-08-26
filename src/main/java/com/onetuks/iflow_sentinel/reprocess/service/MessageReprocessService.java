@@ -20,9 +20,13 @@ import com.onetuks.iflow_sentinel.reprocess.dto.ReprocessHistoryResponse;
 import com.onetuks.iflow_sentinel.reprocess.dto.SapDataStoreEntryDto;
 import com.onetuks.iflow_sentinel.reprocess.dto.SapMplLogDto;
 import com.onetuks.iflow_sentinel.reprocess.dto.StorageMappingDto;
+import com.onetuks.iflow_sentinel.connector.dto.SapRuntimeArtifactDto;
+import com.onetuks.iflow_sentinel.reprocess.dto.SapEntryPointDto;
+import com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -419,7 +423,7 @@ public class MessageReprocessService {
                 }
 
                 String contentType = determineContentType(payload);
-                org.springframework.http.ResponseEntity<String> response = sapODataClient.callInterfaceEndpoint(
+                ResponseEntity<String> response = sapODataClient.callInterfaceEndpoint(
                         tenant, targetEndpointUrl, payload, contentType
                 );
 
@@ -577,7 +581,7 @@ public class MessageReprocessService {
         String artName = artifact.getName();
 
         // 1. /ServiceEndpoints?$filter=Name eq '{name}'&$expand=EntryPoints 직접 조회 (1순위: artName 및 sapArtId)
-        List<String> candidateNames = new java.util.ArrayList<>();
+        List<String> candidateNames = new ArrayList<>();
         if (artName != null && !artName.isBlank()) {
             candidateNames.add(artName);
         }
@@ -587,7 +591,7 @@ public class MessageReprocessService {
 
         for (String candidateName : candidateNames) {
             try {
-                List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> filteredEndpoints =
+                List<SapServiceEndpointDto> filteredEndpoints =
                         sapODataClient.getServiceEndpointsByName(tenant, candidateName);
                 if (filteredEndpoints != null && !filteredEndpoints.isEmpty()) {
                     for (var ep : filteredEndpoints) {
@@ -598,7 +602,7 @@ public class MessageReprocessService {
                         }
                         // EntryPoints 별도 호출 폴백
                         if (ep.Id() != null && !ep.Id().isBlank()) {
-                            var entryPoints = sapODataClient.getEntryPointsForServiceEndpoint(tenant, ep.Id());
+                            List<SapEntryPointDto> entryPoints = sapODataClient.getEntryPointsForServiceEndpoint(tenant, ep.Id());
                             if (entryPoints != null && !entryPoints.isEmpty()) {
                                 for (var entryPoint : entryPoints) {
                                     if (entryPoint.Url() != null && !entryPoint.Url().isBlank()) {
@@ -618,7 +622,7 @@ public class MessageReprocessService {
         // 2. 배포된 런타임 아티팩트에서 직접 ServiceEndpoints 조회 시도 (2순위: sapArtifactId)
         if (sapArtId != null && !sapArtId.isBlank()) {
             try {
-                List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> runtimeEndpoints =
+                List<SapServiceEndpointDto> runtimeEndpoints =
                         sapODataClient.getServiceEndpointsForRuntimeArtifact(tenant, sapArtId);
                 if (runtimeEndpoints != null && !runtimeEndpoints.isEmpty()) {
                     for (var ep : runtimeEndpoints) {
@@ -635,7 +639,7 @@ public class MessageReprocessService {
 
         // 3. 전체 배포된 ServiceEndpoints 목록을 조회하여 이름/ID 매칭 탐색 (3순위)
         try {
-            List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> endpoints =
+            List<SapServiceEndpointDto> endpoints =
                     sapODataClient.getServiceEndpoints(tenant);
             if (endpoints != null && !endpoints.isEmpty()) {
                 for (var ep : endpoints) {
@@ -657,7 +661,7 @@ public class MessageReprocessService {
 
         // 4. 배포된 런타임 아티팩트 목록(/IntegrationRuntimeArtifacts)에서 이름으로 매칭 후 해당 ID로 조회 시도 (4순위)
         try {
-            List<com.onetuks.iflow_sentinel.connector.dto.SapRuntimeArtifactDto> runtimeArtifacts =
+            List<SapRuntimeArtifactDto> runtimeArtifacts =
                     sapODataClient.getRuntimeArtifacts(tenant);
             if (runtimeArtifacts != null) {
                 for (var rArt : runtimeArtifacts) {
@@ -665,7 +669,7 @@ public class MessageReprocessService {
                             || (artName != null && artName.equalsIgnoreCase(rArt.Name()))
                             || (sapArtId != null && rArt.Id() != null && rArt.Id().contains(sapArtId))
                             || (artName != null && rArt.Name() != null && rArt.Name().contains(artName))) {
-                        List<com.onetuks.iflow_sentinel.reprocess.dto.SapServiceEndpointDto> epList =
+                        List<SapServiceEndpointDto> epList =
                                 sapODataClient.getServiceEndpointsForRuntimeArtifact(tenant, rArt.Id());
                         if (epList != null && !epList.isEmpty()) {
                             for (var ep : epList) {
