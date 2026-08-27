@@ -4,6 +4,11 @@ server:
 spring:
     application:
         name: iflow-sentinel
+    datasource:
+        url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/iflow_sentinel}
+        username: ${SPRING_DATASOURCE_USERNAME:iflow_user}
+        password: ${SPRING_DATASOURCE_PASSWORD:iflow_password}
+        driver-class-name: com.mysql.cj.jdbc.Driver
     jpa:
         hibernate:
             ddl-auto: update

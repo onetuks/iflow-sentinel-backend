@@ -1,0 +1,26 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Gradle 빌드 아티팩트 및 캐시
+.gradle
+build
+out
+
+# IDE 및 에디터 설정
+.idea
+.vscode
+*.iml
+*.ipr
+*.iws
+
+# 로그 및 덤프 파일
+*.log
+hs_err_pid*.log
+
+# 문서 및 기타
+docs
+references
+AGENT.md
+HELP.md
