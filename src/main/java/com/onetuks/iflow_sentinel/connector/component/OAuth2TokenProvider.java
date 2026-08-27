@@ -35,14 +35,21 @@ public class OAuth2TokenProvider {
         this.restClient = restClient;
     }
 
-    /** 캐시된 토큰이 있으면 재사용하고, 없거나 만료됐으면 새로 발급받는다. */
+    /**
+     * 캐시된 토큰이 있으면 재사용하고, 없거나 만료됐으면 새로 발급받는다.
+     * 아직 저장되지 않은(id가 없는) 테넌트는 캐싱 대상이 아니므로 매번 새로 발급한다.
+     */
     public String getAccessToken(Tenant tenant) {
-        CachedToken cached = cache.get(tenant.getId());
+        Long tenantId = tenant.getId();
+        if (tenantId == null) {
+            return fetchToken(tenant).accessToken();
+        }
+        CachedToken cached = cache.get(tenantId);
         if (cached != null && cached.isValid()) {
             return cached.accessToken();
         }
         CachedToken fresh = fetchToken(tenant);
-        cache.put(tenant.getId(), fresh);
+        cache.put(tenantId, fresh);
         return fresh.accessToken();
     }
 
