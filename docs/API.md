@@ -30,6 +30,7 @@ Controller 클래스를 기준으로 정리한 API 명세입니다. Base path는
 | `TenantAuthType` | `OAUTH2_CLIENT_CREDENTIALS` |
 | `ArtifactType` | `IFLOW`, `MESSAGE_MAPPING`, `VALUE_MAPPING`, `SCRIPT_COLLECTION`, `FUNCTION_LIBRARY` |
 | `CheckRunStatus` | `RUNNING`, `COMPLETED`, `FAILED` |
+| `LogLevel` | `NONE`, `INFO`, `ERROR`, `DEBUG`, `TRACE` |
 
 ---
 
@@ -184,6 +185,30 @@ Response: `TenantResponse`
 `DELETE /api/tenants/{id}`
 
 Response: 없음
+
+### 테넌트 로그 레벨 설정 조회
+`GET /api/tenants/{id}/log-level`
+
+테넌트에 저장된 MPL(Message Processing Log) 로그 레벨 설정을 조회합니다.
+
+Response (`TenantLogLevelResponse`)
+```json
+{ "tenantId": 1, "logLevel": "DEBUG" }
+```
+
+Error: 저장된 설정이 없으면 `404 Not Found`
+
+### 테넌트 로그 레벨 설정 (전체 아티팩트 일괄 적용)
+`PUT /api/tenants/{id}/log-level`
+
+지정한 로그 레벨을 DB에 저장(upsert)하고, 해당 테넌트에 배포된(`STARTED`) 아티팩트 전체에 즉시 반영합니다. 이후 10분마다 스케줄러(`app.tenant.log-level-cron`)가 저장된 값을 배포된 아티팩트 전체에 재적용(drift correction)합니다. 개별 아티팩트 적용이 실패해도 나머지 아티팩트 처리는 계속됩니다.
+
+Request Body (`TenantLogLevelRequest`)
+```json
+{ "logLevel": "NONE | INFO | ERROR | DEBUG | TRACE" }
+```
+
+Response: `TenantLogLevelResponse` (위와 동일 형태)
 
 ---
 
