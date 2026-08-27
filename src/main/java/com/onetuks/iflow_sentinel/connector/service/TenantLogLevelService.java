@@ -16,16 +16,22 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 
 /**
  * 테넌트에 배포된 아티팩트 전체의 MPL 로그 레벨을 일괄 변경/재적용한다. 관리자의 수동 API 호출과
  * 10분 주기 스케줄러가 동일한 적용 로직({@link #applyLogLevelToAllArtifacts})을 공유한다.
+ * 아티팩트별 SAP 호출은 서로 독립적인 블로킹 I/O이므로 가상 스레드로 동시에 실행해 지연 시간을 줄인다.
  */
 @Service
 public class TenantLogLevelService {
 
     private static final Logger log = LoggerFactory.getLogger(TenantLogLevelService.class);
     private static final String STARTED_STATUS = "STARTED";
+    /** SAP가 HTTP/2 커넥션당 허용하는 동시 스트림 수를 넘지 않도록 실제 동시 SAP 호출 수를 제한한다. */
+    private static final int MAX_CONCURRENT_SAP_CALLS = 10;
 
     private final TenantRepository tenantRepository;
     private final TenantLogLevelSettingRepository settingRepository;
@@ -78,16 +84,29 @@ public class TenantLogLevelService {
     }
 
     private void applyLogLevelToAllArtifacts(Tenant tenant, LogLevel logLevel) {
-        List<SapRuntimeArtifactDto> artifacts = odataClient.getRuntimeArtifacts(tenant);
-        for (SapRuntimeArtifactDto artifact : artifacts) {
-            if (!STARTED_STATUS.equals(artifact.Status())) {
-                continue;
-            }
-            try {
-                odataClient.setMplLogLevel(tenant, artifact.Id(), logLevel.name());
-            } catch (Exception e) {
-                log.error("아티팩트 로그 레벨 설정 실패 - Tenant: {}, Artifact: {}, Level: {}. Error: {}",
-                        tenant.getId(), artifact.Id(), logLevel, e.getMessage());
+        List<SapRuntimeArtifactDto> targets = odataClient.getRuntimeArtifacts(tenant).stream()
+                .filter(artifact -> STARTED_STATUS.equals(artifact.Status()))
+                .toList();
+
+        Semaphore concurrencyLimiter = new Semaphore(MAX_CONCURRENT_SAP_CALLS);
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (SapRuntimeArtifactDto artifact : targets) {
+                executor.submit(() -> {
+                    try {
+                        concurrencyLimiter.acquire();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                    try {
+                        odataClient.setMplLogLevel(tenant, artifact.Id(), logLevel.name());
+                    } catch (Exception e) {
+                        log.error("아티팩트 로그 레벨 설정 실패 - Tenant: {}, Artifact: {}, Level: {}. Error: {}",
+                                tenant.getId(), artifact.Id(), logLevel, e.getMessage());
+                    } finally {
+                        concurrencyLimiter.release();
+                    }
+                });
             }
         }
     }

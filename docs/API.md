@@ -664,3 +664,93 @@ Response: `StorageMappingDto`
 `DELETE /api/reprocess/storage-mappings?tenantId={tenantId}&artifactId={artifactId}`
 
 Response: 없음 (204 No Content)
+
+---
+
+## 11. Notification API
+
+`TenantNotificationController` — `/api/tenants/{tenantId}/notifications`
+
+테넌트별 SAP IS 실패 메시지 이메일 리포팅 설정, 테스트 발송 및 즉시 리포트 발송 관리.
+
+### 테넌트 알림 설정 조회
+`GET /api/tenants/{tenantId}/notifications`
+
+Response (`TenantNotificationConfigResponse`):
+```json
+{
+  "id": 1,
+  "tenantId": 1,
+  "tenantName": "PROD_CF_TENANT",
+  "isEnabled": true,
+  "recipients": "admin@company.com, ops@company.com",
+  "lastNotifiedAt": "2026-08-27T10:00:00"
+}
+```
+
+### 테넌트 알림 설정 수정
+`PUT /api/tenants/{tenantId}/notifications`
+
+Request Body (`TenantNotificationConfigRequest`):
+```json
+{
+  "isEnabled": true,
+  "recipients": "admin@company.com, ops@company.com"
+}
+```
+
+Response: `TenantNotificationConfigResponse` (위와 동일 형태)
+
+### 테스트 이메일 발송
+`POST /api/tenants/{tenantId}/notifications/test-mail`
+
+Request Body (`TestEmailRequest`):
+```json
+{
+  "targetEmail": "dev@company.com"
+}
+```
+
+Response: 없음 (200 OK)
+
+### 실패 리포트 즉시 발송 (수동 트리거)
+`POST /api/tenants/{tenantId}/notifications/send-report?force={force}`
+
+- `force`: 선택 (기본값 `false`). `true` 지정 시 신규 에러 발생 여부와 무관하게 현재 감지된 실패 목록 전체를 강제 발송.
+
+Response (`NotificationHistoryResponse`):
+```json
+{
+  "id": 1,
+  "tenantId": 1,
+  "tenantName": "PROD_CF_TENANT",
+  "sentAt": "2026-08-27T10:00:00",
+  "recipientCount": 2,
+  "failureCount": 5,
+  "status": "SUCCESS | FAILED",
+  "subject": "[iFlow Sentinel] [경고] PROD_CF_TENANT 테넌트 실패 메시지 알림 (5건)",
+  "errorMessage": null
+}
+```
+- 신규 실패 건이 없어 발송되지 않은 경우: `204 No Content` 반환
+
+### 알림 발송 히스토리 목록 조회
+`GET /api/tenants/{tenantId}/notifications/histories`
+
+Response (`NotificationHistoryResponse[]`):
+```json
+[
+  {
+    "id": 1,
+    "tenantId": 1,
+    "tenantName": "PROD_CF_TENANT",
+    "sentAt": "2026-08-27T10:00:00",
+    "recipientCount": 2,
+    "failureCount": 5,
+    "status": "SUCCESS",
+    "subject": "[iFlow Sentinel] [경고] PROD_CF_TENANT 테넌트 실패 메시지 알림 (5건)",
+    "errorMessage": null
+  }
+]
+```
+

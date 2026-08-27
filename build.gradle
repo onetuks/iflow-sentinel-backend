@@ -45,12 +45,12 @@ dependencies {
 
 	// Excel export
 	implementation 'org.apache.poi:poi-ooxml:5.3.0'
+
+	// Mail
+	implementation 'org.springframework.boot:spring-boot-starter-mail'
 }
 
 tasks.named('test') {
 	useJUnitPlatform()
-	jvmArgs '-Dfile.encoding=UTF-8'
-	systemProperty 'file.encoding', 'UTF-8'
-	systemProperty 'user.language', 'en'
-	systemProperty 'user.country', 'US'
 }
+

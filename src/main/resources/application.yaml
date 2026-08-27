@@ -11,6 +11,21 @@ spring:
         properties:
             hibernate:
                 format_sql: false
+    mail:
+        host: ${SPRING_MAIL_HOST:localhost}
+        port: ${SPRING_MAIL_PORT:587}
+        username: ${SPRING_MAIL_USERNAME:}
+        password: ${SPRING_MAIL_PASSWORD:}
+        properties:
+            mail:
+                smtp:
+                    auth: ${SPRING_MAIL_SMTP_AUTH:false}
+                    starttls:
+                        enable: ${SPRING_MAIL_SMTP_STARTTLS_ENABLE:true}
+                        required: false
+                    connectiontimeout: 5000
+                    timeout: 5000
+                    writetimeout: 5000
 
 iflow-sentinel:
     security:
@@ -20,3 +35,7 @@ app:
     tenant:
         sync-cron: "0 */10 * * * *"
         log-level-cron: "0 */10 * * * *"
+    notification:
+        cron: "${APP_NOTIFICATION_CRON:0 */15 * * * *}"
+        sender-email: "${APP_NOTIFICATION_SENDER:noreply-iflow-sentinel@company.com}"
+        dashboard-base-url: "${APP_DASHBOARD_BASE_URL:http://localhost:3000}"
