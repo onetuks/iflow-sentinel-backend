@@ -1,8 +1,11 @@
 package com.onetuks.iflow_sentinel.connector.controller;
 
 import com.onetuks.iflow_sentinel.connector.dto.ConnectionTestResult;
+import com.onetuks.iflow_sentinel.connector.dto.TenantLogLevelRequest;
+import com.onetuks.iflow_sentinel.connector.dto.TenantLogLevelResponse;
 import com.onetuks.iflow_sentinel.connector.dto.TenantRequest;
 import com.onetuks.iflow_sentinel.connector.dto.TenantResponse;
+import com.onetuks.iflow_sentinel.connector.service.TenantLogLevelService;
 import com.onetuks.iflow_sentinel.connector.service.TenantService;
 
 import jakarta.validation.Valid;
@@ -24,9 +27,11 @@ import java.util.List;
 public class TenantController {
 
     private final TenantService tenantService;
+    private final TenantLogLevelService logLevelService;
 
-    public TenantController(TenantService tenantService) {
+    public TenantController(TenantService tenantService, TenantLogLevelService logLevelService) {
         this.tenantService = tenantService;
+        this.logLevelService = logLevelService;
     }
 
     @PostMapping
@@ -71,5 +76,16 @@ public class TenantController {
     @PostMapping("/{id}/sync")
     public void sync(@PathVariable Long id) {
         tenantService.sync(id);
+    }
+
+    @PutMapping("/{id}/log-level")
+    public TenantLogLevelResponse setLogLevel(@PathVariable Long id,
+            @Valid @RequestBody TenantLogLevelRequest request) {
+        return logLevelService.setTenantLogLevel(id, request.logLevel());
+    }
+
+    @GetMapping("/{id}/log-level")
+    public TenantLogLevelResponse getLogLevel(@PathVariable Long id) {
+        return logLevelService.getTenantLogLevel(id);
     }
 }

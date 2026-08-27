@@ -4,6 +4,7 @@ import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
 import com.onetuks.iflow_sentinel.connector.domain.tenant.TenantAuthType;
 import com.onetuks.iflow_sentinel.connector.dto.ODataCollectionResponse;
 import com.onetuks.iflow_sentinel.connector.dto.ODataEntityResponse;
+import com.onetuks.iflow_sentinel.connector.dto.SapMplLogLevelRequest;
 import com.onetuks.iflow_sentinel.connector.dto.SapRuntimeArtifactDto;
 import com.onetuks.iflow_sentinel.exception.ConnectorException;
 import com.onetuks.iflow_sentinel.reprocess.dto.SapEntryPointDto;
@@ -43,6 +44,8 @@ public class SapODataClient {
 
     private static final Logger log = LoggerFactory.getLogger(SapODataClient.class);
     private static final int MAX_PAGINATION_PAGES = 200;
+    private static final String OPERATIONS_SET_MPL_LOG_LEVEL_PATH =
+            "/Operations/com.sap.it.op.tmn.commands.dashboard.webui.IntegrationComponentSetMplLogLevelCommand";
 
     private final OAuth2TokenProvider tokenProvider;
     private final RestClient restClient;
@@ -466,6 +469,59 @@ public class SapODataClient {
             log.warn("SAP IntegrationRuntimeArtifacts 목록 조회 실패: {}", e.getMessage());
             return List.of();
         }
+    }
+
+    /**
+     * SAP WebUI 내부 Operations 커맨드 API로 특정 배포된 런타임 아티팩트의 MPL 로그 레벨을 설정한다.
+     * 표준 OData(/api/v1) API가 아니며, OAuth2 Bearer 토큰만으로 인증한다(CSRF/쿠키 불필요).
+     * POST https://&lt;host&gt;/Operations/com.sap.it.op.tmn.commands.dashboard.webui.IntegrationComponentSetMplLogLevelCommand
+     */
+    public boolean setMplLogLevel(Tenant tenant, String artifactSymbolicName, String logLevel) {
+        String token = tokenProvider.getAccessToken(tenant);
+        String fullUrl = stripApiV1(tenant.getOdataUrl()) + OPERATIONS_SET_MPL_LOG_LEVEL_PATH;
+        SapMplLogLevelRequest payload = SapMplLogLevelRequest.of(artifactSymbolicName, logLevel);
+
+        log.info("[OUTBOUND SAP Operations] POST {} (artifact={}, level={})", fullUrl, artifactSymbolicName,
+                logLevel);
+        try {
+            ResponseEntity<String> response = restClient.post()
+                    .uri(URI.create(fullUrl))
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(payload)
+                    .retrieve()
+                    .toEntity(String.class);
+
+            String body = response.getBody() != null ? response.getBody() : "";
+            boolean success = response.getStatusCode().is2xxSuccessful()
+                    && (body.contains("logConfiguration") || body.contains("true"));
+            if (!success) {
+                log.warn("[OUTBOUND SAP Operations] MPL 로그 레벨 설정 응답이 예상과 다름 - URL: {}, Status: {}, Body: {}",
+                        fullUrl, response.getStatusCode(), body);
+            }
+            return success;
+        } catch (RestClientResponseException e) {
+            log.error("[OUTBOUND SAP Operations] MPL 로그 레벨 설정 실패 - HTTP Status: {}, URL: {}, ResponseBody: {}",
+                    e.getStatusCode().value(), fullUrl, e.getResponseBodyAsString(), e);
+            throw new ConnectorException("MPL 로그 레벨 설정 실패 (HTTP " + e.getStatusCode().value() + "): " + fullUrl,
+                    e.getStatusCode().value(), e);
+        } catch (ResourceAccessException e) {
+            log.error("[OUTBOUND SAP Operations] 연결 실패 - URL: {}, Message: {}", fullUrl, e.getMessage(), e);
+            throw new ConnectorException("Operations 엔드포인트에 연결할 수 없습니다: " + fullUrl + " (원인: " + e.getMessage() + ")",
+                    -1, e);
+        }
+    }
+
+    /** OData 베이스 URL(.../api/v1 포함 가능)에서 스킴+호스트만 남긴다(Operations 엔드포인트는 /api/v1 경로를 쓰지 않음). */
+    private String stripApiV1(String odataUrl) {
+        String baseUrl = odataUrl != null ? odataUrl.trim() : "";
+        if (baseUrl.contains("/api/v1")) {
+            baseUrl = baseUrl.substring(0, baseUrl.indexOf("/api/v1"));
+        }
+        if (baseUrl.endsWith("/")) {
+            baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
+        }
+        return baseUrl;
     }
 
     /**

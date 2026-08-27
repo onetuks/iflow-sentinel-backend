@@ -19,3 +19,4 @@ iflow-sentinel:
 app:
     tenant:
         sync-cron: "0 */10 * * * *"
+        log-level-cron: "0 */10 * * * *"
