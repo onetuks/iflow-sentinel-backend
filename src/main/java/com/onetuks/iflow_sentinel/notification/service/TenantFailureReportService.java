@@ -20,10 +20,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+
 
 @Service
 public class TenantFailureReportService {
@@ -77,11 +77,25 @@ public class TenantFailureReportService {
             throw new IllegalArgumentException("알림을 활성화하려면 최소 1개 이상의 유효한 수신자 이메일이 필요합니다.");
         }
 
-        config.update(Boolean.TRUE.equals(request.isEnabled()), String.join(", ", validatedRecipients));
+        config.update(Boolean.TRUE.equals(request.isEnabled()), String.join(", ", validatedRecipients), request.intervalMinutes());
         TenantNotificationConfig saved = configRepository.save(config);
-        log.info("테넌트 알림 설정 갱신 완료. tenantId={}, isEnabled={}, recipients={}",
-                tenantId, saved.isEnabled(), saved.getRecipients());
+        log.info("테넌트 알림 설정 갱신 완료. tenantId={}, isEnabled={}, recipients={}, intervalMinutes={}",
+                tenantId, saved.isEnabled(), saved.getRecipients(), saved.getIntervalMinutes());
         return TenantNotificationConfigResponse.from(saved);
+    }
+
+    /**
+     * 특정 테넌트 설정이 현재 시점에 탐색 실행 대상인지 판정
+     */
+    public boolean isDueForExecution(TenantNotificationConfig config, LocalDateTime now) {
+        if (config == null || !config.isEnabled()) {
+            return false;
+        }
+        if (config.getLastCheckedAt() == null) {
+            return true;
+        }
+        int interval = config.getIntervalMinutes() > 0 ? config.getIntervalMinutes() : 15;
+        return !now.isBefore(config.getLastCheckedAt().plusMinutes(interval));
     }
 
     /**
@@ -127,6 +141,10 @@ public class TenantFailureReportService {
         }
 
         TenantNotificationConfig config = optConfig.get();
+        LocalDateTime now = LocalDateTime.now();
+        config.updateLastCheckedAt(now);
+        configRepository.save(config);
+
         List<String> recipients = parseRecipients(config.getRecipients());
         if (recipients.isEmpty()) {
             log.warn("테넌트 알림 수신자 목록이 비어 있어 발송할 수 없습니다. tenantId={}", tenantId);
@@ -167,7 +185,6 @@ public class TenantFailureReportService {
         }
 
         // 3) 메일 제목 및 HTML 본문 렌더링
-        LocalDateTime now = LocalDateTime.now();
         String subject = String.format("[iFlow Sentinel] [경고] %s 테넌트 실패 메시지 알림 (%d건)",
                 tenant.getName(), newFailures.size());
         String htmlBody = emailTemplateBuilder.buildFailureReportHtml(tenant, newFailures, now);
@@ -225,11 +242,14 @@ public class TenantFailureReportService {
                             .tenant(tenant)
                             .isEnabled(false)
                             .recipients("")
+                            .intervalMinutes(15)
+                            .lastCheckedAt(null)
                             .lastNotifiedAt(null)
                             .build();
                     return configRepository.save(newConfig);
                 });
     }
+
 
     private List<String> parseRecipients(String recipientsStr) {
         if (recipientsStr == null || recipientsStr.isBlank()) {

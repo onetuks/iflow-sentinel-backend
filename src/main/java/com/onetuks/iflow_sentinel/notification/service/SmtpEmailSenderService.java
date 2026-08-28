@@ -21,10 +21,18 @@ public class SmtpEmailSenderService implements EmailSenderService {
 
     public SmtpEmailSenderService(
             JavaMailSender javaMailSender,
-            @Value("${app.notification.sender-email:noreply-iflow-sentinel@company.com}") String senderEmail) {
+            @Value("${app.notification.sender-email:}") String senderEmail,
+            @Value("${spring.mail.username:}") String mailUsername) {
         this.javaMailSender = javaMailSender;
-        this.senderEmail = senderEmail;
+        if (senderEmail != null && !senderEmail.isBlank() && !senderEmail.contains("noreply-iflow-sentinel@company.com")) {
+            this.senderEmail = senderEmail;
+        } else if (mailUsername != null && !mailUsername.isBlank()) {
+            this.senderEmail = mailUsername;
+        } else {
+            this.senderEmail = "noreply-iflow-sentinel@company.com";
+        }
     }
+
 
     @Override
     public void sendHtmlEmail(List<String> recipients, String subject, String htmlBody) {

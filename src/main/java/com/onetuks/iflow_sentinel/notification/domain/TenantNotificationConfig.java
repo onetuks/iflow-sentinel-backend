@@ -47,20 +47,43 @@ public class TenantNotificationConfig {
     @Column(name = "last_notified_at")
     private LocalDateTime lastNotifiedAt;
 
+    /**
+     * 실패 메시지 탐색 주기 (분 단위, 기본값 15분)
+     */
+    @Column(name = "interval_minutes", nullable = false)
+    private int intervalMinutes;
+
+    /**
+     * 마지막으로 실패 여부를 탐색/체크한 일시
+     */
+    @Column(name = "last_checked_at")
+    private LocalDateTime lastCheckedAt;
+
     @Builder
-    public TenantNotificationConfig(Tenant tenant, boolean isEnabled, String recipients, LocalDateTime lastNotifiedAt) {
+    public TenantNotificationConfig(Tenant tenant, boolean isEnabled, String recipients,
+                                  Integer intervalMinutes, LocalDateTime lastCheckedAt, LocalDateTime lastNotifiedAt) {
         this.tenant = tenant;
         this.isEnabled = isEnabled;
         this.recipients = recipients;
+        this.intervalMinutes = (intervalMinutes != null && intervalMinutes > 0) ? intervalMinutes : 15;
+        this.lastCheckedAt = lastCheckedAt;
         this.lastNotifiedAt = lastNotifiedAt;
     }
 
-    public void update(boolean isEnabled, String recipients) {
+    public void update(boolean isEnabled, String recipients, Integer intervalMinutes) {
         this.isEnabled = isEnabled;
         this.recipients = recipients;
+        if (intervalMinutes != null && intervalMinutes > 0) {
+            this.intervalMinutes = intervalMinutes;
+        }
+    }
+
+    public void updateLastCheckedAt(LocalDateTime lastCheckedAt) {
+        this.lastCheckedAt = lastCheckedAt;
     }
 
     public void updateLastNotifiedAt(LocalDateTime lastNotifiedAt) {
         this.lastNotifiedAt = lastNotifiedAt;
     }
 }
+

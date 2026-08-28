@@ -123,7 +123,7 @@ class TenantFailureReportServiceTest {
         when(configRepository.findByTenantId(1L)).thenReturn(Optional.of(config));
         when(configRepository.save(any(TenantNotificationConfig.class))).thenAnswer(i -> i.getArgument(0));
 
-        TenantNotificationConfigRequest request = new TenantNotificationConfigRequest(true, "admin1@test.com, admin2@test.com");
+        TenantNotificationConfigRequest request = new TenantNotificationConfigRequest(true, "admin1@test.com, admin2@test.com", 30);
 
         // when
         TenantNotificationConfigResponse response = service.updateConfig(1L, request);
@@ -131,7 +131,9 @@ class TenantFailureReportServiceTest {
         // then
         assertThat(response.isEnabled()).isTrue();
         assertThat(response.recipients()).isEqualTo("admin1@test.com, admin2@test.com");
+        assertThat(response.intervalMinutes()).isEqualTo(30);
     }
+
 
     @Test
     @DisplayName("테스트 이메일을 정상적으로 발송한다")
@@ -271,4 +273,53 @@ class TenantFailureReportServiceTest {
         assertThat(result.get().status()).isEqualTo(NotificationStatus.FAILED);
         assertThat(captor.getValue().getErrorMessage()).contains("SMTP Server Unreachable");
     }
+
+    @Test
+    @DisplayName("isDueForExecution - 알림 비활성화 또는 아직 주기가 되지 않은 경우 false 반환")
+    void isDueForExecution_ReturnsFalse() {
+        LocalDateTime now = LocalDateTime.of(2026, 8, 28, 12, 0);
+
+        // 1. 비활성화 상태
+        TenantNotificationConfig disabledConfig = TenantNotificationConfig.builder()
+                .tenant(tenant)
+                .isEnabled(false)
+                .intervalMinutes(15)
+                .lastCheckedAt(null)
+                .build();
+        assertThat(service.isDueForExecution(disabledConfig, now)).isFalse();
+
+        // 2. 최근 5분 전 점검 완료 (주기 15분)
+        TenantNotificationConfig activeConfig = TenantNotificationConfig.builder()
+                .tenant(tenant)
+                .isEnabled(true)
+                .intervalMinutes(15)
+                .lastCheckedAt(now.minusMinutes(5))
+                .build();
+        assertThat(service.isDueForExecution(activeConfig, now)).isFalse();
+    }
+
+    @Test
+    @DisplayName("isDueForExecution - 최초 점검(lastCheckedAt == null)이거나 주기가 도래한 경우 true 반환")
+    void isDueForExecution_ReturnsTrue() {
+        LocalDateTime now = LocalDateTime.of(2026, 8, 28, 12, 0);
+
+        // 1. 최초 점검
+        TenantNotificationConfig firstTimeConfig = TenantNotificationConfig.builder()
+                .tenant(tenant)
+                .isEnabled(true)
+                .intervalMinutes(15)
+                .lastCheckedAt(null)
+                .build();
+        assertThat(service.isDueForExecution(firstTimeConfig, now)).isTrue();
+
+        // 2. 주기(15분) 경과 (20분 전 점검)
+        TenantNotificationConfig dueConfig = TenantNotificationConfig.builder()
+                .tenant(tenant)
+                .isEnabled(true)
+                .intervalMinutes(15)
+                .lastCheckedAt(now.minusMinutes(20))
+                .build();
+        assertThat(service.isDueForExecution(dueConfig, now)).isTrue();
+    }
 }
+

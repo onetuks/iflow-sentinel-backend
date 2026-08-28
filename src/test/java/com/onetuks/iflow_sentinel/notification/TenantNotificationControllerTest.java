@@ -55,7 +55,7 @@ class TenantNotificationControllerTest {
     @DisplayName("GET /api/tenants/{tenantId}/notifications - 설정 조회 성공")
     void getConfig_Success() throws Exception {
         TenantNotificationConfigResponse response = new TenantNotificationConfigResponse(
-                1L, 1L, "TENANT_A", true, "user@test.com", LocalDateTime.now()
+                1L, 1L, "TENANT_A", true, "user@test.com", 15, LocalDateTime.now(), LocalDateTime.now()
         );
         when(reportService.getConfig(1L)).thenReturn(response);
 
@@ -63,15 +63,16 @@ class TenantNotificationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tenantName").value("TENANT_A"))
                 .andExpect(jsonPath("$.isEnabled").value(true))
+                .andExpect(jsonPath("$.intervalMinutes").value(15))
                 .andExpect(jsonPath("$.recipients").value("user@test.com"));
     }
 
     @Test
     @DisplayName("PUT /api/tenants/{tenantId}/notifications - 설정 갱신 성공")
     void updateConfig_Success() throws Exception {
-        TenantNotificationConfigRequest request = new TenantNotificationConfigRequest(true, "new@test.com");
+        TenantNotificationConfigRequest request = new TenantNotificationConfigRequest(true, "new@test.com", 30);
         TenantNotificationConfigResponse response = new TenantNotificationConfigResponse(
-                1L, 1L, "TENANT_A", true, "new@test.com", LocalDateTime.now()
+                1L, 1L, "TENANT_A", true, "new@test.com", 30, LocalDateTime.now(), LocalDateTime.now()
         );
         when(reportService.updateConfig(eq(1L), any())).thenReturn(response);
 
@@ -79,8 +80,10 @@ class TenantNotificationControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.recipients").value("new@test.com"));
+                .andExpect(jsonPath("$.recipients").value("new@test.com"))
+                .andExpect(jsonPath("$.intervalMinutes").value(30));
     }
+
 
     @Test
     @DisplayName("POST /api/tenants/{tenantId}/notifications/test-mail - 테스트 메일 발송 성공")

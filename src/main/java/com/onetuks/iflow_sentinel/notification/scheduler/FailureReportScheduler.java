@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -28,12 +29,16 @@ public class FailureReportScheduler {
         this.failureReportService = failureReportService;
     }
 
-    @Scheduled(cron = "${app.notification.cron:0 */15 * * * *}")
+    @Scheduled(cron = "${app.notification.cron:0 * * * * *}")
     public void scheduleFailureReporting() {
-        log.info("Starting scheduled failure reporting for active tenants...");
         List<TenantNotificationConfig> activeConfigs = configRepository.findAllByIsEnabledTrueWithTenant();
+        LocalDateTime now = LocalDateTime.now();
 
         for (TenantNotificationConfig config : activeConfigs) {
+            if (!failureReportService.isDueForExecution(config, now)) {
+                continue;
+            }
+
             Long tenantId = config.getTenant().getId();
             String tenantName = config.getTenant().getName();
             try {
@@ -43,6 +48,6 @@ public class FailureReportScheduler {
                         tenantName, tenantId, e.getMessage(), e);
             }
         }
-        log.info("Completed scheduled failure reporting. Checked {} active tenant configurations.", activeConfigs.size());
     }
 }
+

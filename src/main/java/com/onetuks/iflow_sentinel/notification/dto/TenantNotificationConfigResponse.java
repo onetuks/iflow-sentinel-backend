@@ -10,6 +10,8 @@ public record TenantNotificationConfigResponse(
         String tenantName,
         boolean isEnabled,
         String recipients,
+        int intervalMinutes,
+        LocalDateTime lastCheckedAt,
         LocalDateTime lastNotifiedAt
 ) {
     public static TenantNotificationConfigResponse from(TenantNotificationConfig config) {
@@ -19,7 +21,10 @@ public record TenantNotificationConfigResponse(
                 config.getTenant().getName(),
                 config.isEnabled(),
                 config.getRecipients(),
+                config.getIntervalMinutes(),
+                config.getLastCheckedAt(),
                 config.getLastNotifiedAt()
         );
     }
 }
+

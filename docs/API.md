@@ -684,6 +684,8 @@ Response (`TenantNotificationConfigResponse`):
   "tenantName": "PROD_CF_TENANT",
   "isEnabled": true,
   "recipients": "admin@company.com, ops@company.com",
+  "intervalMinutes": 15,
+  "lastCheckedAt": "2026-08-27T10:15:00",
   "lastNotifiedAt": "2026-08-27T10:00:00"
 }
 ```
@@ -695,11 +697,13 @@ Request Body (`TenantNotificationConfigRequest`):
 ```json
 {
   "isEnabled": true,
-  "recipients": "admin@company.com, ops@company.com"
+  "recipients": "admin@company.com, ops@company.com",
+  "intervalMinutes": 15
 }
 ```
 
 Response: `TenantNotificationConfigResponse` (위와 동일 형태)
+
 
 ### 테스트 이메일 발송
 `POST /api/tenants/{tenantId}/notifications/test-mail`
