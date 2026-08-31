@@ -13,9 +13,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
-// AdminAccessGateFilter보다 먼저 실행되어야 인증 실패(401/503) 응답도 로그에 남는다.
+// Spring Security 필터체인(order -100대)보다도 먼저 실행되어야 인증/인가 실패(401/403) 응답도 로그에 남는다.
 @Component
-@Order(Ordered.LOWEST_PRECEDENCE - 2)
+@Order(Ordered.HIGHEST_PRECEDENCE)
 public class ApiLoggingFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(ApiLoggingFilter.class);

@@ -12,4 +12,5 @@ spring:
 iflow-sentinel:
     security:
         credential-key: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
-        admin-key: test-admin-key
+        jwt-secret: dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItdW5pdC10ZXN0cy1vbmx5LTMyYnl0ZXMh
+        jwt-expiration-minutes: 120

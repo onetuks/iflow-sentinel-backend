@@ -40,7 +40,8 @@ spring:
 iflow-sentinel:
     security:
         credential-key: ${CREDENTIAL_ENCRYPTION_KEY:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
-        admin-key: ${ADMIN_GATE_KEY:local-dev-admin-key-change-me}
+        jwt-secret: ${JWT_SECRET:local-dev-jwt-secret-change-me-please-32bytes-minimum}
+        jwt-expiration-minutes: ${JWT_EXPIRATION_MINUTES:120}
 
 app:
     tenant:
