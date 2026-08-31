@@ -40,6 +40,7 @@ spring:
 iflow-sentinel:
     security:
         credential-key: ${CREDENTIAL_ENCRYPTION_KEY:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
+        admin-key: ${ADMIN_GATE_KEY:local-dev-admin-key-change-me}
 
 app:
     tenant:

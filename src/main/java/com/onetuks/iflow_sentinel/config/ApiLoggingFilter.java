@@ -2,6 +2,8 @@ package com.onetuks.iflow_sentinel.config;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -11,7 +13,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
+// AdminAccessGateFilter보다 먼저 실행되어야 인증 실패(401/503) 응답도 로그에 남는다.
 @Component
+@Order(Ordered.LOWEST_PRECEDENCE - 2)
 public class ApiLoggingFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(ApiLoggingFilter.class);
