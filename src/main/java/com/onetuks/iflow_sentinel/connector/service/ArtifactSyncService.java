@@ -53,11 +53,20 @@ public class ArtifactSyncService {
     public List<Artifact> syncArtifacts(IntegrationPackage integrationPackage) {
         String relativePath = "/IntegrationPackages('" + integrationPackage.getSapPackageId()
                 + "')/IntegrationDesigntimeArtifacts";
-        List<SapArtifactDto> dtos = odataClient.getCollection(
-                integrationPackage.getTenant(),
-                relativePath,
-                new ParameterizedTypeReference<ODataCollectionResponse<SapArtifactDto>>() {
-                });
+        List<SapArtifactDto> dtos;
+        try {
+            dtos = odataClient.getCollection(
+                    integrationPackage.getTenant(),
+                    relativePath,
+                    new ParameterizedTypeReference<ODataCollectionResponse<SapArtifactDto>>() {
+                    });
+        } catch (Exception e) {
+            // SAP측 응답 지연(504 등)으로 특정 패키지의 아티팩트 목록 조회가 실패해도
+            // 테넌트 동기화 전체가 중단되지 않도록 이 패키지만 skip하고 기존 DB 데이터를 그대로 유지한다.
+            log.warn("패키지 아티팩트 목록 조회 실패 (skip, 기존 데이터 유지): tenantId={}, packageId={}, message={}",
+                    integrationPackage.getTenant().getId(), integrationPackage.getSapPackageId(), e.getMessage());
+            return artifactRepository.findByIntegrationPackageId(integrationPackage.getId());
+        }
 
         List<Artifact> result = new ArrayList<>();
         for (SapArtifactDto dto : dtos) {

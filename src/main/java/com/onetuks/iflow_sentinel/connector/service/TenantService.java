@@ -14,9 +14,18 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
+import java.util.stream.Collectors;
 
 @Service
 public class TenantService {
+
+    /** SAP가 HTTP/2 커넥션당 허용하는 동시 스트림 수를 넘지 않도록 실제 동시 SAP 호출 수를 제한한다. */
+    private static final int MAX_CONCURRENT_SAP_CALLS = 10;
 
     private final TenantRepository tenantRepository;
     private final ProjectRepository projectRepository;
@@ -176,18 +185,35 @@ public class TenantService {
 
     private void syncTenantData(Tenant tenant) {
         List<IntegrationPackage> packages = packageSyncService.syncPackages(tenant);
-        java.util.Set<String> activeArtifactIds = new java.util.HashSet<>();
-        for (IntegrationPackage pkg : packages) {
-            var syncedArtifacts = artifactSyncService.syncArtifacts(pkg);
-            for (var artifact : syncedArtifacts) {
-                activeArtifactIds.add(artifact.getSapArtifactId());
+
+        // 패키지별 아티팩트 동기화는 서로 독립적인 블로킹 SAP 호출이므로 가상 스레드로 동시 실행해 지연 시간을 줄인다.
+        // syncArtifacts()는 내부적으로 실패를 잡아 skip하므로 여기서 별도 예외 처리는 필요 없다.
+        Set<String> activeArtifactIds = ConcurrentHashMap.newKeySet();
+        Semaphore concurrencyLimiter = new Semaphore(MAX_CONCURRENT_SAP_CALLS);
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (IntegrationPackage pkg : packages) {
+                executor.submit(() -> {
+                    try {
+                        concurrencyLimiter.acquire();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                    try {
+                        artifactSyncService.syncArtifacts(pkg).forEach(
+                                artifact -> activeArtifactIds.add(artifact.getSapArtifactId()));
+                    } finally {
+                        concurrencyLimiter.release();
+                    }
+                });
             }
         }
+
         artifactSyncService.cleanOrphanArtifacts(tenant, activeArtifactIds);
 
-        java.util.Set<String> activePackageIds = packages.stream()
+        Set<String> activePackageIds = packages.stream()
                 .map(IntegrationPackage::getSapPackageId)
-                .collect(java.util.stream.Collectors.toSet());
+                .collect(Collectors.toSet());
         packageSyncService.cleanOrphanPackages(tenant, activePackageIds);
     }
 
