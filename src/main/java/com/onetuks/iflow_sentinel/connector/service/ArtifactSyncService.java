@@ -9,8 +9,14 @@ import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
 import com.onetuks.iflow_sentinel.connector.dto.ODataCollectionResponse;
 import com.onetuks.iflow_sentinel.connector.dto.SapArtifactDto;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,12 +30,24 @@ import java.util.Set;
 @Service
 public class ArtifactSyncService {
 
+    private static final Logger log = LoggerFactory.getLogger(ArtifactSyncService.class);
+
     private final SapODataClient odataClient;
     private final ArtifactRepository artifactRepository;
+
+    // 프록시(REQUIRES_NEW 트랜잭션)를 거쳐 자기 자신을 호출하기 위한 self-injection.
+    // Spring 컨텍스트 밖에서 생성될 경우(단위 테스트 등) this로 대체되어 프록시 없이 동작한다.
+    private ArtifactSyncService self;
 
     public ArtifactSyncService(SapODataClient odataClient, ArtifactRepository artifactRepository) {
         this.odataClient = odataClient;
         this.artifactRepository = artifactRepository;
+        this.self = this;
+    }
+
+    @Autowired
+    public void setSelf(@Lazy ArtifactSyncService self) {
+        this.self = self;
     }
 
     public List<Artifact> syncArtifacts(IntegrationPackage integrationPackage) {
@@ -43,22 +61,34 @@ public class ArtifactSyncService {
 
         List<Artifact> result = new ArrayList<>();
         for (SapArtifactDto dto : dtos) {
-            Artifact existing = artifactRepository.findBySapArtifactId(dto.Id()).orElse(null);
-            if (existing != null) {
-                existing.updateFrom(integrationPackage, dto.Name(), dto.Version(), ArtifactType.IFLOW);
-                result.add(artifactRepository.save(existing));
-            } else {
-                Artifact created = Artifact.builder()
-                        .integrationPackage(integrationPackage)
-                        .sapArtifactId(dto.Id())
-                        .name(dto.Name())
-                        .version(dto.Version())
-                        .type(ArtifactType.IFLOW)
-                        .build();
-                result.add(artifactRepository.save(created));
+            try {
+                result.add(self.upsertArtifact(integrationPackage, dto));
+            } catch (Exception e) {
+                // 동일 아티팩트ID가 중복 수신되는 등 SAP측 데이터 이상으로 upsert가 실패해도
+                // 테넌트 동기화 전체가 중단되지 않도록 개별 아티팩트 단위로 격리해 skip한다.
+                log.warn("아티팩트 동기화 실패 (skip): tenantId={}, packageId={}, artifactId={}, message={}",
+                        integrationPackage.getTenant().getId(), integrationPackage.getSapPackageId(), dto.Id(),
+                        e.getMessage());
             }
         }
         return result;
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Artifact upsertArtifact(IntegrationPackage integrationPackage, SapArtifactDto dto) {
+        Artifact existing = artifactRepository.findBySapArtifactId(dto.Id()).orElse(null);
+        if (existing != null) {
+            existing.updateFrom(integrationPackage, dto.Name(), dto.Version(), ArtifactType.IFLOW);
+            return artifactRepository.save(existing);
+        }
+        Artifact created = Artifact.builder()
+                .integrationPackage(integrationPackage)
+                .sapArtifactId(dto.Id())
+                .name(dto.Name())
+                .version(dto.Version())
+                .type(ArtifactType.IFLOW)
+                .build();
+        return artifactRepository.save(created);
     }
 
     public void cleanOrphanArtifacts(Tenant tenant, Set<String> activeSapArtifactIds) {
