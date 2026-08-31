@@ -53,7 +53,7 @@ class ArtifactTrackerServiceTest {
     void mergesDesigntimeAndRuntimeArtifactsIntoDeploymentStatuses() {
         when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
         when(odataClient.getCollection(eq(tenant), eq("/IntegrationPackages"), any()))
-                .thenReturn(List.of(new SapPackageDto("PKG1", "Package One")));
+                .thenReturn(List.of(new SapPackageDto("PKG1", "Package One", "EDIT_ALLOWED")));
         when(odataClient.getCollection(eq(tenant),
                 eq("/IntegrationPackages('PKG1')/IntegrationDesigntimeArtifacts"), any()))
                 .thenReturn(List.of(

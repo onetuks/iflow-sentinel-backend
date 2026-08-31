@@ -186,12 +186,18 @@ public class TenantService {
     private void syncTenantData(Tenant tenant) {
         List<IntegrationPackage> packages = packageSyncService.syncPackages(tenant);
 
+        // 아티팩트 동기화는 편집 가능(EDIT_ALLOWED)한 패키지만 대상으로 한다.
+        // READ_ONLY 패키지는 SAP 표준 제공 콘텐츠 등으로 고객이 직접 관리하지 않으므로 추적 대상에서 제외한다.
+        List<IntegrationPackage> editablePackages = packages.stream()
+                .filter(IntegrationPackage::isEditable)
+                .toList();
+
         // 패키지별 아티팩트 동기화는 서로 독립적인 블로킹 SAP 호출이므로 가상 스레드로 동시 실행해 지연 시간을 줄인다.
         // syncArtifacts()는 내부적으로 실패를 잡아 skip하므로 여기서 별도 예외 처리는 필요 없다.
         Set<String> activeArtifactIds = ConcurrentHashMap.newKeySet();
         Semaphore concurrencyLimiter = new Semaphore(MAX_CONCURRENT_SAP_CALLS);
         try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            for (IntegrationPackage pkg : packages) {
+            for (IntegrationPackage pkg : editablePackages) {
                 executor.submit(() -> {
                     try {
                         concurrencyLimiter.acquire();

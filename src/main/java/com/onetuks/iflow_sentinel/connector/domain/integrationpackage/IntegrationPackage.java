@@ -34,14 +34,28 @@ public class IntegrationPackage {
     @Column(nullable = false)
     private String name;
 
+    /** SAP IntegrationPackages의 Mode 원본값 (예: EDIT_ALLOWED, READ_ONLY). */
+    @Column
+    private String mode;
+
     @Builder
-    public IntegrationPackage(Tenant tenant, String sapPackageId, String name) {
+    public IntegrationPackage(Tenant tenant, String sapPackageId, String name, String mode) {
         this.tenant = tenant;
         this.sapPackageId = sapPackageId;
         this.name = name;
+        this.mode = mode;
     }
 
     public void rename(String name) {
         this.name = name;
+    }
+
+    public void updateMode(String mode) {
+        this.mode = mode;
+    }
+
+    /** 아티팩트 동기화 대상 여부 - SAP에서 편집 가능(EDIT_ALLOWED)한 패키지만 대상으로 한다. */
+    public boolean isEditable() {
+        return "EDIT_ALLOWED".equals(mode);
     }
 }

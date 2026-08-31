@@ -57,7 +57,8 @@ class TenantServiceTest {
         TenantService service = new TenantService(tenantRepository, projectRepository, connectionService,
                 packageSyncService, artifactSyncService);
         Project project = Project.builder().name("Test Project").build();
-        IntegrationPackage pkg = IntegrationPackage.builder().sapPackageId("PKG1").name("Package 1").tenant(tenant).build();
+        IntegrationPackage pkg = IntegrationPackage.builder().sapPackageId("PKG1").name("Package 1").tenant(tenant)
+                .mode("EDIT_ALLOWED").build();
 
         when(projectRepository.findById(1L)).thenReturn(Optional.of(project));
         when(tenantRepository.existsByProjectIdAndOdataUrl(any(), any())).thenReturn(false);

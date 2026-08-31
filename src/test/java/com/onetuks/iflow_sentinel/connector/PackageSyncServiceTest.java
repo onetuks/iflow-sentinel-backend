@@ -36,7 +36,7 @@ class PackageSyncServiceTest {
     @Test
     void createsNewPackageWhenNotExisting() {
         when(odataClient.getCollection(eq(tenant), eq("/IntegrationPackages"), any()))
-                .thenReturn(List.of(new SapPackageDto("PKG1", "Package One")));
+                .thenReturn(List.of(new SapPackageDto("PKG1", "Package One", "EDIT_ALLOWED")));
         when(packageRepository.findBySapPackageId("PKG1")).thenReturn(Optional.empty());
         when(packageRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -53,7 +53,7 @@ class PackageSyncServiceTest {
         IntegrationPackage existing = IntegrationPackage.builder().tenant(tenant).sapPackageId("PKG1").name("Old Name")
                 .build();
         when(odataClient.getCollection(eq(tenant), eq("/IntegrationPackages"), any()))
-                .thenReturn(List.of(new SapPackageDto("PKG1", "New Name")));
+                .thenReturn(List.of(new SapPackageDto("PKG1", "New Name", "EDIT_ALLOWED")));
         when(packageRepository.findBySapPackageId("PKG1")).thenReturn(Optional.of(existing));
         when(packageRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 

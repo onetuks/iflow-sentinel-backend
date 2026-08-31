@@ -38,12 +38,14 @@ public class PackageSyncService {
             IntegrationPackage existing = packageRepository.findBySapPackageId(dto.Id()).orElse(null);
             if (existing != null) {
                 existing.rename(dto.Name());
+                existing.updateMode(dto.Mode());
                 result.add(packageRepository.save(existing));
             } else {
                 IntegrationPackage created = IntegrationPackage.builder()
                         .tenant(tenant)
                         .sapPackageId(dto.Id())
                         .name(dto.Name())
+                        .mode(dto.Mode())
                         .build();
                 result.add(packageRepository.save(created));
             }
