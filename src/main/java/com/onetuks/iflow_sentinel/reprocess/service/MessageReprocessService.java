@@ -7,6 +7,7 @@ import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
 import com.onetuks.iflow_sentinel.connector.domain.tenant.TenantRepository;
 import com.onetuks.iflow_sentinel.connector.dto.ODataCollectionResponse;
 import com.onetuks.iflow_sentinel.exception.ConnectorException;
+import com.onetuks.iflow_sentinel.reprocess.domain.ProtocolType;
 import com.onetuks.iflow_sentinel.reprocess.domain.ReprocessHistory;
 import com.onetuks.iflow_sentinel.reprocess.domain.ReprocessHistoryRepository;
 import com.onetuks.iflow_sentinel.reprocess.domain.ReprocessStatus;
@@ -49,17 +50,20 @@ public class MessageReprocessService {
     private final SapODataClient sapODataClient;
     private final StorageMappingService storageMappingService;
     private final ReprocessHistoryRepository reprocessHistoryRepository;
+    private final List<MessageSender> messageSenders;
 
     public MessageReprocessService(ArtifactRepository artifactRepository,
                                    TenantRepository tenantRepository,
                                    SapODataClient sapODataClient,
                                    StorageMappingService storageMappingService,
-                                   ReprocessHistoryRepository reprocessHistoryRepository) {
+                                   ReprocessHistoryRepository reprocessHistoryRepository,
+                                   List<MessageSender> messageSenders) {
         this.artifactRepository = artifactRepository;
         this.tenantRepository = tenantRepository;
         this.sapODataClient = sapODataClient;
         this.storageMappingService = storageMappingService;
         this.reprocessHistoryRepository = reprocessHistoryRepository;
+        this.messageSenders = messageSenders;
     }
 
     @Transactional(readOnly = true)
@@ -422,9 +426,10 @@ public class MessageReprocessService {
                     payload = fetchBinaryPayload(tenant, request.messageId());
                 }
 
-                String contentType = determineContentType(payload);
-                ResponseEntity<String> response = sapODataClient.callInterfaceEndpoint(
-                        tenant, targetEndpointUrl, payload, contentType
+                ProtocolType protocolType = request.protocolType() != null ? request.protocolType() : ProtocolType.HTTP;
+                MessageSender messageSender = resolveMessageSender(protocolType);
+                ResponseEntity<String> response = messageSender.send(
+                        tenant, targetEndpointUrl, payload, request.soapAction()
                 );
 
                 int statusCode = response.getStatusCode().value();
@@ -690,17 +695,11 @@ public class MessageReprocessService {
         return null;
     }
 
-    private String determineContentType(String payload) {
-        if (payload == null || payload.isBlank()) {
-            return "application/json";
-        }
-        String trimmed = payload.trim();
-        if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-            return "application/json";
-        } else if (trimmed.startsWith("<")) {
-            return "application/xml";
-        }
-        return "text/plain;charset=UTF-8";
+    private MessageSender resolveMessageSender(ProtocolType protocolType) {
+        return messageSenders.stream()
+                .filter(sender -> sender.supports(protocolType))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("지원하지 않는 프로토콜입니다: " + protocolType));
     }
 
     private ExpirationInfo calculateExpiration(LocalDateTime logStart, Integer expireDays) {

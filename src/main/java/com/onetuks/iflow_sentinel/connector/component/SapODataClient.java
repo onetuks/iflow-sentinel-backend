@@ -529,35 +529,8 @@ public class SapODataClient {
      */
     public ResponseEntity<String> callInterfaceEndpoint(Tenant tenant, String targetUrl, String payload,
             String contentType) {
-        String authHeader;
-        if (tenant.getIfClientID() != null && !tenant.getIfClientID().isBlank()) {
-            String username = tenant.getIfClientID();
-            String password = tenant.getIfClientSecret() != null ? tenant.getIfClientSecret() : "";
-            String authString = username + ":" + password;
-            authHeader = "Basic " + Base64.getEncoder()
-                    .encodeToString(authString.getBytes(StandardCharsets.UTF_8));
-        } else {
-            String token = tokenProvider.getAccessToken(tenant);
-            authHeader = "Bearer " + token;
-        }
-
-        String fullUrl = targetUrl;
-        if (!fullUrl.startsWith("http://") && !fullUrl.startsWith("https://")) {
-            String baseUrl = (tenant.getIfUrl() != null && !tenant.getIfUrl().isBlank())
-                    ? tenant.getIfUrl().trim()
-                    : (tenant.getApiUrl() != null ? tenant.getApiUrl() : "");
-
-            if (baseUrl.contains("/api/v1")) {
-                baseUrl = baseUrl.replace("/api/v1", "");
-            }
-            if (baseUrl.endsWith("/")) {
-                baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
-            }
-            if (!fullUrl.startsWith("/")) {
-                fullUrl = "/" + fullUrl;
-            }
-            fullUrl = baseUrl + fullUrl;
-        }
+        String authHeader = resolveInterfaceAuthHeader(tenant);
+        String fullUrl = resolveFullInterfaceUrl(tenant, targetUrl);
 
         MediaType mediaType = MediaType.APPLICATION_JSON;
         if (contentType != null && !contentType.isBlank()) {
@@ -593,6 +566,78 @@ public class SapODataClient {
             log.error("[OUTBOUND INTERFACE CALL] 예외 발생 - URL: {}, Message: {}", fullUrl, e.getMessage(), e);
             throw e;
         }
+    }
+
+    /**
+     * SOAP 인터페이스 엔드포인트로 메시지 페이로드(완성된 SOAP Envelope)를 직접 POST 전송한다.
+     * Content-Type은 {@code text/xml}로 고정하고, 대상 인터페이스가 요구하는 {@code SOAPAction} 헤더를 함께 보낸다.
+     * 인증/URL 결정 로직은 {@link #callInterfaceEndpoint}와 동일하다.
+     */
+    public ResponseEntity<String> callSoapInterfaceEndpoint(Tenant tenant, String targetUrl, String payload,
+            String soapAction) {
+        String authHeader = resolveInterfaceAuthHeader(tenant);
+        String fullUrl = resolveFullInterfaceUrl(tenant, targetUrl);
+        String effectiveSoapAction = soapAction != null ? soapAction : "";
+
+        log.info("[OUTBOUND INTERFACE CALL - SOAP] POST {} (Auth: {}, SOAPAction: {}, payloadLength: {})",
+                fullUrl, authHeader.startsWith("Basic") ? "Basic" : "Bearer", effectiveSoapAction,
+                payload != null ? payload.length() : 0);
+
+        try {
+            return restClient.post()
+                    .uri(URI.create(fullUrl))
+                    .header(HttpHeaders.AUTHORIZATION, authHeader)
+                    .header("SOAPAction", effectiveSoapAction)
+                    .contentType(new MediaType(MediaType.TEXT_XML, StandardCharsets.UTF_8))
+                    .body(payload != null ? payload : "")
+                    .retrieve()
+                    .toEntity(String.class);
+        } catch (RestClientResponseException e) {
+            log.error("[OUTBOUND INTERFACE CALL - SOAP] 실패 - HTTP Status: {}, URL: {}, ResponseBody: {}",
+                    e.getStatusCode().value(), fullUrl, e.getResponseBodyAsString(), e);
+            throw new ConnectorException(
+                    "SOAP 인터페이스 직접 호출 실패 (HTTP " + e.getStatusCode().value() + "): " + e.getResponseBodyAsString(),
+                    e.getStatusCode().value(), e);
+        } catch (ResourceAccessException e) {
+            log.error("[OUTBOUND INTERFACE CALL - SOAP] 연결 실패 - URL: {}, Message: {}", fullUrl, e.getMessage(), e);
+            throw new ConnectorException("SOAP 인터페이스 엔드포인트에 연결할 수 없습니다: " + fullUrl + " (원인: " + e.getMessage() + ")",
+                    -1, e);
+        } catch (Exception e) {
+            log.error("[OUTBOUND INTERFACE CALL - SOAP] 예외 발생 - URL: {}, Message: {}", fullUrl, e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    private String resolveInterfaceAuthHeader(Tenant tenant) {
+        if (tenant.getIfClientID() != null && !tenant.getIfClientID().isBlank()) {
+            String username = tenant.getIfClientID();
+            String password = tenant.getIfClientSecret() != null ? tenant.getIfClientSecret() : "";
+            String authString = username + ":" + password;
+            return "Basic " + Base64.getEncoder().encodeToString(authString.getBytes(StandardCharsets.UTF_8));
+        }
+        String token = tokenProvider.getAccessToken(tenant);
+        return "Bearer " + token;
+    }
+
+    private String resolveFullInterfaceUrl(Tenant tenant, String targetUrl) {
+        String fullUrl = targetUrl;
+        if (!fullUrl.startsWith("http://") && !fullUrl.startsWith("https://")) {
+            String baseUrl = (tenant.getIfUrl() != null && !tenant.getIfUrl().isBlank())
+                    ? tenant.getIfUrl().trim()
+                    : (tenant.getApiUrl() != null ? tenant.getApiUrl() : "");
+
+            if (baseUrl.contains("/api/v1")) {
+                baseUrl = baseUrl.replace("/api/v1", "");
+            }
+            if (baseUrl.endsWith("/")) {
+                baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
+            }
+            if (!fullUrl.startsWith("/")) {
+                fullUrl = "/" + fullUrl;
+            }
+            fullUrl = baseUrl + fullUrl;
+        }
+        return fullUrl;
     }
 
     private String buildUrl(String baseUrl, String relativePath) {
