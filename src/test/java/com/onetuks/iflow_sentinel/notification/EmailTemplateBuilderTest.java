@@ -1,7 +1,6 @@
 package com.onetuks.iflow_sentinel.notification;
 
 import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
-import com.onetuks.iflow_sentinel.connector.domain.tenant.TenantAuthType;
 import com.onetuks.iflow_sentinel.connector.domain.tenant.TenantPlatform;
 import com.onetuks.iflow_sentinel.notification.service.EmailTemplateBuilder;
 import com.onetuks.iflow_sentinel.reprocess.dto.MplFailureResponse;
@@ -24,12 +23,11 @@ class EmailTemplateBuilderTest {
         emailTemplateBuilder = new EmailTemplateBuilder("http://localhost:3000");
         testTenant = Tenant.builder()
                 .name("PROD_CF_TENANT")
-                .odataUrl("https://example.com/odata")
-                .tokenUrl("https://example.com/oauth/token")
+                .apiUrl("https://example.com/odata")
+                .apiTokenUrl("https://example.com/oauth/token")
                 .platformType(TenantPlatform.CLOUD_FOUNDRY)
-                .authType(TenantAuthType.OAUTH2_CLIENT_CREDENTIALS)
-                .clientId("test-client")
-                .clientSecret("test-secret")
+                .apiClientId("test-client")
+                .apiClientSecret("test-secret")
                 .build();
     }
 

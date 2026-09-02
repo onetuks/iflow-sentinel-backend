@@ -1,7 +1,6 @@
 package com.onetuks.iflow_sentinel.connector.component;
 
 import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
-import com.onetuks.iflow_sentinel.connector.domain.tenant.TenantAuthType;
 import com.onetuks.iflow_sentinel.connector.dto.ODataCollectionResponse;
 import com.onetuks.iflow_sentinel.connector.dto.ODataEntityResponse;
 import com.onetuks.iflow_sentinel.connector.dto.SapMplLogLevelRequest;
@@ -34,7 +33,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
- * SAP IS OData API 인증 호출 공용 헬퍼. {@code tenant.odataUrl()}은 "/api/v1"까지 포함한 베이스
+ * SAP IS OData API 인증 호출 공용 헬퍼. {@code tenant.apiUrl()}은 "/api/v1"까지 포함한 베이스
  * URL로 가정한다
  * (설계서 10장 엔드포인트와 일치). 응답은 OData V2 {"d":{"results":[...]}} 형식으로 가정하며,
  * 실제 테넌트로 검증 시 이 가정이 다르면 이 클래스만 수정하면 되도록 격리해 둔다.
@@ -58,7 +57,7 @@ public class SapODataClient {
     public <T> List<T> getCollection(Tenant tenant, String relativePath,
             ParameterizedTypeReference<ODataCollectionResponse<T>> typeRef) {
         String token = tokenProvider.getAccessToken(tenant);
-        String fullUrl = buildUrl(tenant.getOdataUrl(), relativePath);
+        String fullUrl = buildUrl(tenant.getApiUrl(), relativePath);
         log.info("[OUTBOUND SAP OData] GET {}", fullUrl);
         try {
             ODataCollectionResponse<T> response = restClient.get()
@@ -88,7 +87,7 @@ public class SapODataClient {
     public <T> Optional<T> findInCollection(Tenant tenant, String relativePath,
             ParameterizedTypeReference<ODataCollectionResponse<T>> typeRef, Predicate<T> predicate) {
         String token = tokenProvider.getAccessToken(tenant);
-        String url = buildUrl(tenant.getOdataUrl(), relativePath);
+        String url = buildUrl(tenant.getApiUrl(), relativePath);
         int pagesFetched = 0;
         while (url != null && pagesFetched < MAX_PAGINATION_PAGES) {
             pagesFetched++;
@@ -131,7 +130,7 @@ public class SapODataClient {
             String next = response.d().next();
             url = (next == null || next.startsWith("http://") || next.startsWith("https://"))
                     ? next
-                    : buildUrl(tenant.getOdataUrl(), next);
+                    : buildUrl(tenant.getApiUrl(), next);
         }
         log.warn("[OUTBOUND SAP OData] GET (Paginated) 총 {}페이지 검색 완료 후 조건 일치 항목을 찾지 못함", pagesFetched);
         return Optional.empty();
@@ -140,7 +139,7 @@ public class SapODataClient {
     public <T> T getEntity(Tenant tenant, String relativePath,
             ParameterizedTypeReference<ODataEntityResponse<T>> typeRef) {
         String token = tokenProvider.getAccessToken(tenant);
-        String fullUrl = buildUrl(tenant.getOdataUrl(), relativePath);
+        String fullUrl = buildUrl(tenant.getApiUrl(), relativePath);
         log.info("[OUTBOUND SAP OData] GET (Entity) {}", fullUrl);
         try {
             ODataEntityResponse<T> response = restClient.get()
@@ -167,7 +166,7 @@ public class SapODataClient {
 
     public byte[] getBinary(Tenant tenant, String relativePath) {
         String token = tokenProvider.getAccessToken(tenant);
-        String fullUrl = buildUrl(tenant.getOdataUrl(), relativePath);
+        String fullUrl = buildUrl(tenant.getApiUrl(), relativePath);
         log.info("[OUTBOUND SAP OData] GET (Binary) {}", fullUrl);
         try {
             byte[] body = restClient.get()
@@ -204,7 +203,7 @@ public class SapODataClient {
     public void executeAction(Tenant tenant, HttpMethod method, String relativePath) {
         String token = tokenProvider.getAccessToken(tenant);
         CsrfToken csrf = fetchCsrfToken(tenant, token);
-        String fullUrl = buildUrl(tenant.getOdataUrl(), relativePath);
+        String fullUrl = buildUrl(tenant.getApiUrl(), relativePath);
         log.info("[OUTBOUND SAP OData] {} {}", method, fullUrl);
         try {
             restClient.method(method)
@@ -224,7 +223,7 @@ public class SapODataClient {
     }
 
     private CsrfToken fetchCsrfToken(Tenant tenant, String accessToken) {
-        String baseUrl = buildUrl(tenant.getOdataUrl(), "");
+        String baseUrl = buildUrl(tenant.getApiUrl(), "");
         try {
             ResponseEntity<Void> response = restClient.get()
                     .uri(baseUrl)
@@ -478,7 +477,7 @@ public class SapODataClient {
      */
     public boolean setMplLogLevel(Tenant tenant, String artifactSymbolicName, String logLevel) {
         String token = tokenProvider.getAccessToken(tenant);
-        String fullUrl = stripApiV1(tenant.getOdataUrl()) + OPERATIONS_SET_MPL_LOG_LEVEL_PATH;
+        String fullUrl = stripApiV1(tenant.getApiUrl()) + OPERATIONS_SET_MPL_LOG_LEVEL_PATH;
         SapMplLogLevelRequest payload = SapMplLogLevelRequest.of(artifactSymbolicName, logLevel);
 
         log.info("[OUTBOUND SAP Operations] POST {} (artifact={}, level={})", fullUrl, artifactSymbolicName,
@@ -513,8 +512,8 @@ public class SapODataClient {
     }
 
     /** OData 베이스 URL(.../api/v1 포함 가능)에서 스킴+호스트만 남긴다(Operations 엔드포인트는 /api/v1 경로를 쓰지 않음). */
-    private String stripApiV1(String odataUrl) {
-        String baseUrl = odataUrl != null ? odataUrl.trim() : "";
+    private String stripApiV1(String apiUrl) {
+        String baseUrl = apiUrl != null ? apiUrl.trim() : "";
         if (baseUrl.contains("/api/v1")) {
             baseUrl = baseUrl.substring(0, baseUrl.indexOf("/api/v1"));
         }
@@ -531,10 +530,9 @@ public class SapODataClient {
     public ResponseEntity<String> callInterfaceEndpoint(Tenant tenant, String targetUrl, String payload,
             String contentType) {
         String authHeader;
-        if (tenant.getInterfaceAuthType() == TenantAuthType.BASIC
-                || (tenant.getInterfaceUsername() != null && !tenant.getInterfaceUsername().isBlank())) {
-            String username = tenant.getInterfaceUsername() != null ? tenant.getInterfaceUsername() : "";
-            String password = tenant.getInterfacePassword() != null ? tenant.getInterfacePassword() : "";
+        if (tenant.getIfClientID() != null && !tenant.getIfClientID().isBlank()) {
+            String username = tenant.getIfClientID();
+            String password = tenant.getIfClientSecret() != null ? tenant.getIfClientSecret() : "";
             String authString = username + ":" + password;
             authHeader = "Basic " + Base64.getEncoder()
                     .encodeToString(authString.getBytes(StandardCharsets.UTF_8));
@@ -545,9 +543,9 @@ public class SapODataClient {
 
         String fullUrl = targetUrl;
         if (!fullUrl.startsWith("http://") && !fullUrl.startsWith("https://")) {
-            String baseUrl = (tenant.getInterfaceUrl() != null && !tenant.getInterfaceUrl().isBlank())
-                    ? tenant.getInterfaceUrl().trim()
-                    : (tenant.getOdataUrl() != null ? tenant.getOdataUrl() : "");
+            String baseUrl = (tenant.getIfUrl() != null && !tenant.getIfUrl().isBlank())
+                    ? tenant.getIfUrl().trim()
+                    : (tenant.getApiUrl() != null ? tenant.getApiUrl() : "");
 
             if (baseUrl.contains("/api/v1")) {
                 baseUrl = baseUrl.replace("/api/v1", "");

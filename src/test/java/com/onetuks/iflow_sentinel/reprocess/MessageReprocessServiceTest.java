@@ -58,16 +58,14 @@ class MessageReprocessServiceTest {
     void setUp() {
         tenant = tenantRepository.save(Tenant.builder()
                 .name("Test Tenant")
-                .odataUrl("https://test.hana.ondemand.com/api/v1")
-                .tokenUrl("https://test.hana.ondemand.com/oauth/token")
+                .apiUrl("https://test.hana.ondemand.com/api/v1")
+                .apiTokenUrl("https://test.hana.ondemand.com/oauth/token")
                 .platformType(com.onetuks.iflow_sentinel.connector.domain.tenant.TenantPlatform.CLOUD_FOUNDRY)
-                .authType(com.onetuks.iflow_sentinel.connector.domain.tenant.TenantAuthType.OAUTH2_CLIENT_CREDENTIALS)
-                .clientId("client-id")
-                .clientSecret("client-secret")
-                .interfaceUrl("https://test-rt.cfapps.eu10.hana.ondemand.com")
-                .interfaceAuthType(com.onetuks.iflow_sentinel.connector.domain.tenant.TenantAuthType.BASIC)
-                .interfaceUsername("iflow-user")
-                .interfacePassword("iflow-pass")
+                .apiClientId("client-id")
+                .apiClientSecret("client-secret")
+                .ifUrl("https://test-rt.cfapps.eu10.hana.ondemand.com")
+                .ifClientID("iflow-user")
+                .ifClientSecret("iflow-pass")
                 .build());
 
         integrationPackage = packageRepository.save(IntegrationPackage.builder()

@@ -1,7 +1,6 @@
 package com.onetuks.iflow_sentinel.notification;
 
 import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
-import com.onetuks.iflow_sentinel.connector.domain.tenant.TenantAuthType;
 import com.onetuks.iflow_sentinel.connector.domain.tenant.TenantPlatform;
 import com.onetuks.iflow_sentinel.connector.domain.tenant.TenantRepository;
 import com.onetuks.iflow_sentinel.notification.domain.NotificationHistory;
@@ -77,12 +76,11 @@ class TenantFailureReportServiceTest {
 
         tenant = Tenant.builder()
                 .name("PROD_TENANT")
-                .odataUrl("https://example.com/odata")
-                .tokenUrl("https://example.com/oauth/token")
+                .apiUrl("https://example.com/odata")
+                .apiTokenUrl("https://example.com/oauth/token")
                 .platformType(TenantPlatform.CLOUD_FOUNDRY)
-                .authType(TenantAuthType.OAUTH2_CLIENT_CREDENTIALS)
-                .clientId("client-id")
-                .clientSecret("client-secret")
+                .apiClientId("client-id")
+                .apiClientSecret("client-secret")
                 .build();
         ReflectionTestUtils.setField(tenant, "id", 1L);
     }

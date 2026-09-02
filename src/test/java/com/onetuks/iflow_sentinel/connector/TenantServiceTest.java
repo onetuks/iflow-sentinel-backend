@@ -1,7 +1,6 @@
 package com.onetuks.iflow_sentinel.connector;
 
 import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
-import com.onetuks.iflow_sentinel.connector.domain.tenant.TenantAuthType;
 import com.onetuks.iflow_sentinel.connector.domain.tenant.TenantPlatform;
 import com.onetuks.iflow_sentinel.connector.domain.tenant.TenantRepository;
 import com.onetuks.iflow_sentinel.connector.domain.project.Project;
@@ -20,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -61,7 +61,7 @@ class TenantServiceTest {
                 .mode("EDIT_ALLOWED").build();
 
         when(projectRepository.findById(1L)).thenReturn(Optional.of(project));
-        when(tenantRepository.existsByProjectIdAndOdataUrl(any(), any())).thenReturn(false);
+        when(tenantRepository.existsByProjectIdAndApiUrl(any(), any())).thenReturn(false);
         when(connectionService.testConnection(any())).thenReturn(new ConnectionTestResult(true, 200, "연결에 성공했습니다."));
         when(tenantRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(packageSyncService.syncPackages(any())).thenReturn(List.of(pkg));
@@ -69,12 +69,13 @@ class TenantServiceTest {
         TenantRequest request = new TenantRequest(
                 1L,
                 "New Tenant",
+                TenantPlatform.CLOUD_FOUNDRY,
                 "https://new.example.com/api/v1",
                 "https://new.example.com/oauth/token",
-                TenantPlatform.CLOUD_FOUNDRY,
-                TenantAuthType.OAUTH2_CLIENT_CREDENTIALS,
                 "client-id",
-                "client-secret");
+                "client-secret",
+                LocalDate.now(),
+                null, null, null, null, null);
 
         TenantResponse response = service.create(request);
 
@@ -89,19 +90,20 @@ class TenantServiceTest {
                 packageSyncService, artifactSyncService);
         Project project = Project.builder().name("Test Project").build();
         when(projectRepository.findById(1L)).thenReturn(Optional.of(project));
-        when(tenantRepository.existsByProjectIdAndOdataUrl(any(), any())).thenReturn(false);
+        when(tenantRepository.existsByProjectIdAndApiUrl(any(), any())).thenReturn(false);
         when(connectionService.testConnection(any()))
                 .thenReturn(new ConnectionTestResult(false, 401, "Unauthorized"));
 
         TenantRequest request = new TenantRequest(
                 1L,
                 "Invalid Tenant",
+                TenantPlatform.CLOUD_FOUNDRY,
                 "https://invalid.example.com/api/v1",
                 "https://invalid.example.com/oauth/token",
-                TenantPlatform.CLOUD_FOUNDRY,
-                TenantAuthType.OAUTH2_CLIENT_CREDENTIALS,
                 "invalid-id",
-                "invalid-secret");
+                "invalid-secret",
+                LocalDate.now(),
+                null, null, null, null, null);
 
         assertThatThrownBy(() -> service.create(request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -122,29 +124,28 @@ class TenantServiceTest {
         TenantRequest request = new TenantRequest(
                 null,
                 "New Name",
+                TenantPlatform.NEO,
                 "https://new.example.com/api/v1",
                 "https://new.example.com/oauth/token",
-                TenantPlatform.NEO,
-                TenantAuthType.OAUTH2_CLIENT_CREDENTIALS,
                 "new-client-id",
                 "new-client-secret",
+                LocalDate.now(),
                 "https://new-rt.example.com",
                 "https://new.auth.example.com/oauth/token",
-                TenantAuthType.BASIC,
-                "new-interface-user",
-                "new-interface-pass");
+                "new-if-client-id",
+                "new-if-client-secret",
+                LocalDate.now());
 
         TenantResponse response = service.update(1L, request);
 
         assertThat(response.name()).isEqualTo("New Name");
-        assertThat(response.odataUrl()).isEqualTo("https://new.example.com/api/v1");
-        assertThat(response.tokenUrl()).isEqualTo("https://new.example.com/oauth/token");
+        assertThat(response.apiUrl()).isEqualTo("https://new.example.com/api/v1");
+        assertThat(response.apiTokenUrl()).isEqualTo("https://new.example.com/oauth/token");
         assertThat(response.platformType()).isEqualTo(TenantPlatform.NEO);
-        assertThat(response.clientId()).isEqualTo("new-client-id");
-        assertThat(response.interfaceUrl()).isEqualTo("https://new-rt.example.com");
-        assertThat(response.interfaceTokenUrl()).isEqualTo("https://new.auth.example.com/oauth/token");
-        assertThat(response.interfaceAuthType()).isEqualTo(TenantAuthType.BASIC);
-        assertThat(response.interfaceUsername()).isEqualTo("new-interface-user");
+        assertThat(response.apiClientId()).isEqualTo("new-client-id");
+        assertThat(response.ifUrl()).isEqualTo("https://new-rt.example.com");
+        assertThat(response.ifTokenUrl()).isEqualTo("https://new.auth.example.com/oauth/token");
+        assertThat(response.ifClientID()).isEqualTo("new-if-client-id");
     }
 
     @Test

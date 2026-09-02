@@ -742,7 +742,7 @@ public class MessageReprocessService {
     }
 
     private String buildSapDeepLinkUrl(Tenant tenant, StorageType storageType, String storageName) {
-        String baseUrl = tenant.getOdataUrl() != null ? tenant.getOdataUrl()
+        String baseUrl = tenant.getApiUrl() != null ? tenant.getApiUrl()
                 : "https://sap-integration-suite.cfapps.sap";
         if (baseUrl.contains("/api/v1")) {
             baseUrl = baseUrl.replace("/api/v1", "");

@@ -18,6 +18,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
+
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -34,98 +36,98 @@ public class Tenant {
     @Column(nullable = false)
     private String name;
 
-    @Column(nullable = false)
-    private String odataUrl;
-
-    @Column(nullable = false)
-    private String tokenUrl;
-
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private TenantPlatform platformType;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private TenantAuthType authType;
+    /** API(OData) 활용을 위한 자격증명. */
+    @Column(name = "api_url", nullable = false)
+    private String apiUrl;
 
-    @Column(nullable = false)
-    private String clientId;
+    @Column(name = "api_token_url", nullable = false)
+    private String apiTokenUrl;
 
-    @Convert(converter = CredentialConverter.class)
-    @Column(nullable = false)
-    private String clientSecret;
-
-    @Column(name = "interface_url")
-    private String interfaceUrl;
-
-    @Column(name = "interface_token_url")
-    private String interfaceTokenUrl;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "interface_auth_type")
-    private TenantAuthType interfaceAuthType;
-
-    @Column(name = "interface_username")
-    private String interfaceUsername;
+    @Column(name = "api_client_id", nullable = false)
+    private String apiClientId;
 
     @Convert(converter = CredentialConverter.class)
-    @Column(name = "interface_password")
-    private String interfacePassword;
+    @Column(name = "api_client_secret", nullable = false)
+    private String apiClientSecret;
+
+    @Column(name = "api_create_date")
+    private LocalDate apiCreateDate;
+
+    /** 인터페이스(iFlow 엔드포인트) 호출을 위한 자격증명. */
+    @Column(name = "if_url")
+    private String ifUrl;
+
+    @Column(name = "if_token_url")
+    private String ifTokenUrl;
+
+    @Column(name = "if_client_id")
+    private String ifClientID;
+
+    @Convert(converter = CredentialConverter.class)
+    @Column(name = "if_client_secret")
+    private String ifClientSecret;
+
+    @Column(name = "if_create_date")
+    private LocalDate ifCreateDate;
 
     @Builder
     public Tenant(
             Project project,
             String name,
-            String odataUrl,
-            String tokenUrl,
             TenantPlatform platformType,
-            TenantAuthType authType,
-            String clientId,
-            String clientSecret,
-            String interfaceUrl,
-            String interfaceTokenUrl,
-            TenantAuthType interfaceAuthType,
-            String interfaceUsername,
-            String interfacePassword) {
+            String apiUrl,
+            String apiTokenUrl,
+            String apiClientId,
+            String apiClientSecret,
+            LocalDate apiCreateDate,
+            String ifUrl,
+            String ifTokenUrl,
+            String ifClientID,
+            String ifClientSecret,
+            LocalDate ifCreateDate) {
         this.project = project;
         this.name = name;
-        this.odataUrl = odataUrl;
-        this.tokenUrl = tokenUrl;
         this.platformType = platformType;
-        this.authType = authType;
-        this.clientId = clientId;
-        this.clientSecret = clientSecret;
-        this.interfaceUrl = interfaceUrl;
-        this.interfaceTokenUrl = interfaceTokenUrl;
-        this.interfaceAuthType = interfaceAuthType != null ? interfaceAuthType : TenantAuthType.BASIC;
-        this.interfaceUsername = interfaceUsername;
-        this.interfacePassword = interfacePassword;
+        this.apiUrl = apiUrl;
+        this.apiTokenUrl = apiTokenUrl;
+        this.apiClientId = apiClientId;
+        this.apiClientSecret = apiClientSecret;
+        this.apiCreateDate = apiCreateDate;
+        this.ifUrl = ifUrl;
+        this.ifTokenUrl = ifTokenUrl;
+        this.ifClientID = ifClientID;
+        this.ifClientSecret = ifClientSecret;
+        this.ifCreateDate = ifCreateDate;
     }
 
     public void update(
             String name,
-            String odataUrl,
-            String tokenUrl,
             TenantPlatform platformType,
-            TenantAuthType authType,
-            String clientId,
-            String clientSecret,
-            String interfaceUrl,
-            String interfaceTokenUrl,
-            TenantAuthType interfaceAuthType,
-            String interfaceUsername,
-            String interfacePassword) {
+            String apiUrl,
+            String apiTokenUrl,
+            String apiClientId,
+            String apiClientSecret,
+            LocalDate apiCreateDate,
+            String ifUrl,
+            String ifTokenUrl,
+            String ifClientID,
+            String ifClientSecret,
+            LocalDate ifCreateDate) {
         this.name = name;
-        this.odataUrl = odataUrl;
-        this.tokenUrl = tokenUrl;
         this.platformType = platformType;
-        this.authType = authType;
-        this.clientId = clientId;
-        this.clientSecret = clientSecret;
-        this.interfaceUrl = interfaceUrl;
-        this.interfaceTokenUrl = interfaceTokenUrl;
-        this.interfaceAuthType = interfaceAuthType != null ? interfaceAuthType : TenantAuthType.BASIC;
-        this.interfaceUsername = interfaceUsername;
-        this.interfacePassword = interfacePassword;
+        this.apiUrl = apiUrl;
+        this.apiTokenUrl = apiTokenUrl;
+        this.apiClientId = apiClientId;
+        this.apiClientSecret = apiClientSecret;
+        this.apiCreateDate = apiCreateDate;
+        this.ifUrl = ifUrl;
+        this.ifTokenUrl = ifTokenUrl;
+        this.ifClientID = ifClientID;
+        this.ifClientSecret = ifClientSecret;
+        this.ifCreateDate = ifCreateDate;
     }
 }

@@ -10,7 +10,6 @@ import com.onetuks.iflow_sentinel.connector.domain.project.ProjectRepository;
 import com.onetuks.iflow_sentinel.connector.domain.project.ProjectRule;
 import com.onetuks.iflow_sentinel.connector.domain.project.ProjectRuleRepository;
 import com.onetuks.iflow_sentinel.connector.domain.tenant.Tenant;
-import com.onetuks.iflow_sentinel.connector.domain.tenant.TenantAuthType;
 import com.onetuks.iflow_sentinel.connector.domain.tenant.TenantPlatform;
 import com.onetuks.iflow_sentinel.connector.domain.tenant.TenantRepository;
 import com.onetuks.iflow_sentinel.connector.service.ArtifactDownloadService;
@@ -98,12 +97,11 @@ class CheckRunServiceIntegrationTest {
         Tenant tenant = tenantRepository.save(Tenant.builder()
                 .project(project)
                 .name("Test Tenant")
-                .odataUrl("https://tenant.example.com/api/v1")
-                .tokenUrl("https://tenant.example.com/oauth/token")
+                .apiUrl("https://tenant.example.com/api/v1")
+                .apiTokenUrl("https://tenant.example.com/oauth/token")
                 .platformType(TenantPlatform.CLOUD_FOUNDRY)
-                .authType(TenantAuthType.OAUTH2_CLIENT_CREDENTIALS)
-                .clientId("client-id")
-                .clientSecret("client-secret")
+                .apiClientId("client-id")
+                .apiClientSecret("client-secret")
                 .build());
         integrationPackage = packageRepository.save(IntegrationPackage.builder()
                 .tenant(tenant).sapPackageId("PKG1-" + unique).name("Package One").build());

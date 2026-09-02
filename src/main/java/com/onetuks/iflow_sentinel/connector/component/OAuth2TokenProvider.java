@@ -55,7 +55,7 @@ public class OAuth2TokenProvider {
 
     /** 캐시를 거치지 않고 항상 새로 토큰 발급을 시도한다. 연결 테스트(TNT-005) 전용. */
     public CachedToken fetchToken(Tenant tenant) {
-        String tokenUrl = tenant.getTokenUrl();
+        String tokenUrl = tenant.getApiTokenUrl();
         if (!tokenUrl.endsWith("/oauth/token")) {
             tokenUrl = tokenUrl.endsWith("/") ? tokenUrl + "oauth/token" : tokenUrl + "/oauth/token";
         }
@@ -63,12 +63,12 @@ public class OAuth2TokenProvider {
 
         try {
             String requestBody = "grant_type=client_credentials"
-                    + "&client_id=" + java.net.URLEncoder.encode(tenant.getClientId(), java.nio.charset.StandardCharsets.UTF_8)
-                    + "&client_secret=" + java.net.URLEncoder.encode(tenant.getClientSecret(), java.nio.charset.StandardCharsets.UTF_8);
+                    + "&client_id=" + java.net.URLEncoder.encode(tenant.getApiClientId(), java.nio.charset.StandardCharsets.UTF_8)
+                    + "&client_secret=" + java.net.URLEncoder.encode(tenant.getApiClientSecret(), java.nio.charset.StandardCharsets.UTF_8);
 
             TokenResponse response = restClient.post()
                     .uri(tokenUrl)
-                    .headers(headers -> headers.setBasicAuth(tenant.getClientId(), tenant.getClientSecret()))
+                    .headers(headers -> headers.setBasicAuth(tenant.getApiClientId(), tenant.getApiClientSecret()))
                     .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                     .body(requestBody)
                     .retrieve()

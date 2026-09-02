@@ -12,20 +12,14 @@ import com.onetuks.iflow_sentinel.connector.dto.TenantResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 
 @Service
 public class TenantService {
-
-    /** SAP가 HTTP/2 커넥션당 허용하는 동시 스트림 수를 넘지 않도록 실제 동시 SAP 호출 수를 제한한다. */
-    private static final int MAX_CONCURRENT_SAP_CALLS = 10;
 
     private final TenantRepository tenantRepository;
     private final ProjectRepository projectRepository;
@@ -48,24 +42,24 @@ public class TenantService {
         Project project = projectRepository.findById(request.projectId())
                 .orElseThrow(() -> new NoSuchElementException("프로젝트를 찾을 수 없습니다: " + request.projectId()));
 
-        if (tenantRepository.existsByProjectIdAndOdataUrl(request.projectId(), request.odataUrl())) {
-            throw new IllegalArgumentException("동일한 프로젝트에 이미 등록된 OData URL입니다.");
+        if (tenantRepository.existsByProjectIdAndApiUrl(request.projectId(), request.apiUrl())) {
+            throw new IllegalArgumentException("동일한 프로젝트에 이미 등록된 API URL입니다.");
         }
 
         Tenant tenant = Tenant.builder()
                 .project(project)
                 .name(request.name())
-                .odataUrl(request.odataUrl())
-                .tokenUrl(request.tokenUrl())
                 .platformType(request.platformType())
-                .authType(request.authType())
-                .clientId(request.clientId())
-                .clientSecret(request.clientSecret())
-                .interfaceUrl(request.interfaceUrl())
-                .interfaceTokenUrl(request.interfaceTokenUrl())
-                .interfaceAuthType(request.interfaceAuthType())
-                .interfaceUsername(request.interfaceUsername())
-                .interfacePassword(request.interfacePassword())
+                .apiUrl(request.apiUrl())
+                .apiTokenUrl(request.apiTokenUrl())
+                .apiClientId(request.apiClientId())
+                .apiClientSecret(request.apiClientSecret())
+                .apiCreateDate(request.apiCreateDate())
+                .ifUrl(request.ifUrl())
+                .ifTokenUrl(request.ifTokenUrl())
+                .ifClientID(request.ifClientID())
+                .ifClientSecret(request.ifClientSecret())
+                .ifCreateDate(request.ifCreateDate())
                 .build();
 
         ConnectionTestResult connectionResult = connectionService.testConnection(tenant);
@@ -94,17 +88,17 @@ public class TenantService {
     public ConnectionTestResult testConnection(TenantRequest request) {
         Tenant tenant = Tenant.builder()
                 .name(request.name())
-                .odataUrl(request.odataUrl())
-                .tokenUrl(request.tokenUrl())
                 .platformType(request.platformType())
-                .authType(request.authType())
-                .clientId(request.clientId())
-                .clientSecret(request.clientSecret())
-                .interfaceUrl(request.interfaceUrl())
-                .interfaceTokenUrl(request.interfaceTokenUrl())
-                .interfaceAuthType(request.interfaceAuthType())
-                .interfaceUsername(request.interfaceUsername())
-                .interfacePassword(request.interfacePassword())
+                .apiUrl(request.apiUrl())
+                .apiTokenUrl(request.apiTokenUrl())
+                .apiClientId(request.apiClientId())
+                .apiClientSecret(request.apiClientSecret())
+                .apiCreateDate(request.apiCreateDate())
+                .ifUrl(request.ifUrl())
+                .ifTokenUrl(request.ifTokenUrl())
+                .ifClientID(request.ifClientID())
+                .ifClientSecret(request.ifClientSecret())
+                .ifCreateDate(request.ifCreateDate())
                 .build();
         return connectionService.testConnection(tenant);
     }
@@ -116,25 +110,25 @@ public class TenantService {
 
     public ConnectionTestResult testConnection(Long id, TenantRequest request) {
         Tenant existing = findTenant(id);
-        String secret = (request.clientSecret() != null && !request.clientSecret().isBlank())
-                ? request.clientSecret()
-                : existing.getClientSecret();
-        String interfacePass = (request.interfacePassword() != null && !request.interfacePassword().isBlank())
-                ? request.interfacePassword()
-                : existing.getInterfacePassword();
+        String secret = (request.apiClientSecret() != null && !request.apiClientSecret().isBlank())
+                ? request.apiClientSecret()
+                : existing.getApiClientSecret();
+        String ifSecret = (request.ifClientSecret() != null && !request.ifClientSecret().isBlank())
+                ? request.ifClientSecret()
+                : existing.getIfClientSecret();
         Tenant tenant = Tenant.builder()
                 .name(request.name())
-                .odataUrl(request.odataUrl())
-                .tokenUrl(request.tokenUrl())
                 .platformType(request.platformType())
-                .authType(request.authType())
-                .clientId(request.clientId())
-                .clientSecret(secret)
-                .interfaceUrl(request.interfaceUrl() != null ? request.interfaceUrl() : existing.getInterfaceUrl())
-                .interfaceTokenUrl(request.interfaceTokenUrl() != null ? request.interfaceTokenUrl() : existing.getInterfaceTokenUrl())
-                .interfaceAuthType(request.interfaceAuthType() != null ? request.interfaceAuthType() : existing.getInterfaceAuthType())
-                .interfaceUsername(request.interfaceUsername() != null ? request.interfaceUsername() : existing.getInterfaceUsername())
-                .interfacePassword(interfacePass)
+                .apiUrl(request.apiUrl())
+                .apiTokenUrl(request.apiTokenUrl())
+                .apiClientId(request.apiClientId())
+                .apiClientSecret(secret)
+                .apiCreateDate(request.apiCreateDate() != null ? request.apiCreateDate() : existing.getApiCreateDate())
+                .ifUrl(request.ifUrl() != null ? request.ifUrl() : existing.getIfUrl())
+                .ifTokenUrl(request.ifTokenUrl() != null ? request.ifTokenUrl() : existing.getIfTokenUrl())
+                .ifClientID(request.ifClientID() != null ? request.ifClientID() : existing.getIfClientID())
+                .ifClientSecret(ifSecret)
+                .ifCreateDate(request.ifCreateDate() != null ? request.ifCreateDate() : existing.getIfCreateDate())
                 .build();
         return connectionService.testConnection(tenant);
     }
@@ -143,32 +137,32 @@ public class TenantService {
     public TenantResponse update(Long id, TenantRequest request) {
         Tenant tenant = findTenant(id);
 
-        if (!tenant.getOdataUrl().equals(request.odataUrl()) &&
-                tenantRepository.existsByProjectIdAndOdataUrl(tenant.getProject().getId(), request.odataUrl())) {
-            throw new IllegalArgumentException("동일한 프로젝트에 이미 등록된 OData URL입니다.");
+        if (!tenant.getApiUrl().equals(request.apiUrl()) &&
+                tenantRepository.existsByProjectIdAndApiUrl(tenant.getProject().getId(), request.apiUrl())) {
+            throw new IllegalArgumentException("동일한 프로젝트에 이미 등록된 API URL입니다.");
         }
 
-        String newSecret = (request.clientSecret() != null && !request.clientSecret().isBlank())
-                ? request.clientSecret()
-                : tenant.getClientSecret();
+        String newSecret = (request.apiClientSecret() != null && !request.apiClientSecret().isBlank())
+                ? request.apiClientSecret()
+                : tenant.getApiClientSecret();
 
-        String newInterfacePassword = (request.interfacePassword() != null && !request.interfacePassword().isBlank())
-                ? request.interfacePassword()
-                : tenant.getInterfacePassword();
+        String newIfSecret = (request.ifClientSecret() != null && !request.ifClientSecret().isBlank())
+                ? request.ifClientSecret()
+                : tenant.getIfClientSecret();
 
         tenant.update(
                 request.name(),
-                request.odataUrl(),
-                request.tokenUrl(),
                 request.platformType(),
-                request.authType(),
-                request.clientId(),
+                request.apiUrl(),
+                request.apiTokenUrl(),
+                request.apiClientId(),
                 newSecret,
-                request.interfaceUrl() != null ? request.interfaceUrl() : tenant.getInterfaceUrl(),
-                request.interfaceTokenUrl() != null ? request.interfaceTokenUrl() : tenant.getInterfaceTokenUrl(),
-                request.interfaceAuthType() != null ? request.interfaceAuthType() : tenant.getInterfaceAuthType(),
-                request.interfaceUsername(),
-                newInterfacePassword);
+                request.apiCreateDate() != null ? request.apiCreateDate() : tenant.getApiCreateDate(),
+                request.ifUrl() != null ? request.ifUrl() : tenant.getIfUrl(),
+                request.ifTokenUrl() != null ? request.ifTokenUrl() : tenant.getIfTokenUrl(),
+                request.ifClientID(),
+                newIfSecret,
+                request.ifCreateDate() != null ? request.ifCreateDate() : tenant.getIfCreateDate());
         return TenantResponse.from(tenantRepository.save(tenant));
     }
 
@@ -177,7 +171,9 @@ public class TenantService {
         tenantRepository.deleteById(id);
     }
 
-    @Transactional
+    // syncTenantData()가 여러 REQUIRES_NEW 트랜잭션을 순차적으로 여는 동안 커넥션을 하나씩 열고 닫는데,
+    // 여기서 @Transactional을 걸면 그 전체 시간 동안 커넥션 풀에서 커넥션 1개를 추가로 물고 있게 되어
+    // 풀 고갈(Could not open JPA EntityManager for transaction)을 유발한다.
     public void sync(Long id) {
         Tenant tenant = findTenant(id);
         syncTenantData(tenant);
@@ -192,27 +188,13 @@ public class TenantService {
                 .filter(IntegrationPackage::isEditable)
                 .toList();
 
-        // 패키지별 아티팩트 동기화는 서로 독립적인 블로킹 SAP 호출이므로 가상 스레드로 동시 실행해 지연 시간을 줄인다.
+        // 패키지별 아티팩트 동기화를 순차적으로 실행한다. 동시성을 두면 SAP 호출/REQUIRES_NEW 트랜잭션이
+        // 요구하는 JDBC 커넥션 수요를 예측하기 어려워지므로, 단순하고 예측 가능한 순차 처리로 유지한다.
         // syncArtifacts()는 내부적으로 실패를 잡아 skip하므로 여기서 별도 예외 처리는 필요 없다.
-        Set<String> activeArtifactIds = ConcurrentHashMap.newKeySet();
-        Semaphore concurrencyLimiter = new Semaphore(MAX_CONCURRENT_SAP_CALLS);
-        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            for (IntegrationPackage pkg : editablePackages) {
-                executor.submit(() -> {
-                    try {
-                        concurrencyLimiter.acquire();
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        return;
-                    }
-                    try {
-                        artifactSyncService.syncArtifacts(pkg).forEach(
-                                artifact -> activeArtifactIds.add(artifact.getSapArtifactId()));
-                    } finally {
-                        concurrencyLimiter.release();
-                    }
-                });
-            }
+        Set<String> activeArtifactIds = new HashSet<>();
+        for (IntegrationPackage pkg : editablePackages) {
+            artifactSyncService.syncArtifacts(pkg).forEach(
+                    artifact -> activeArtifactIds.add(artifact.getSapArtifactId()));
         }
 
         artifactSyncService.cleanOrphanArtifacts(tenant, activeArtifactIds);
