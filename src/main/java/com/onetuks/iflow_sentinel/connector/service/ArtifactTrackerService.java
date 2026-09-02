@@ -18,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -114,6 +115,9 @@ public class ArtifactTrackerService {
         return result;
     }
 
+    // getDefaultValues()가 캐시 미스 시 내부적으로 DB 쓰기(syncPackageDefaultValues)를 수행할 수 있으므로
+    // readOnly로 지정하면 안 된다 (readOnly 트랜잭션에 join되면 그 쓰기가 거부될 수 있다).
+    @Transactional
     public List<ArtifactConfigurationResponse> getConfigurations(Long tenantId, String artifactId, String version) {
         Tenant tenant = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new NoSuchElementException("테넌트를 찾을 수 없습니다: " + tenantId));
