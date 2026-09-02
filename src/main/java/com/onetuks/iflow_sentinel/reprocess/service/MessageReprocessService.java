@@ -380,6 +380,51 @@ public class MessageReprocessService {
         if (request.storageType() == StorageType.DATASTORE || (request.payload() != null && !request.payload().isBlank())) {
             ResolvedEndpoint resolvedEndpoint = resolveInterfaceEndpoint(tenant, artifact, request.endpointUrl());
             String targetEndpointUrl = resolvedEndpoint.url();
+            ProtocolType protocolType = request.protocolType() != null
+                    ? request.protocolType()
+                    : (resolvedEndpoint.protocolType() != null ? resolvedEndpoint.protocolType() : ProtocolType.HTTP);
+            log.info("재처리 호출 프로토콜 결정 - messageId: {}, protocolType: {} (요청 명시: {}, SAP 자동판별: {})",
+                    request.messageId(), protocolType, request.protocolType(), resolvedEndpoint.protocolType());
+
+            // ProcessDirect는 같은 테넌트 내부 iFlow 간 전용 어댑터라 외부에서 직접 재호출할 수 없다.
+            // 호출을 시도조차 하지 않고, 잘못된 프로토콜 호출로 인터페이스 측 에러가 발생하는 것을 사전에 막는다.
+            if (protocolType == ProtocolType.PROCESS_DIRECT) {
+                String processDirectMessage = "이 인터페이스는 ProcessDirect(내부 전용) 어댑터로 구성되어 있어 "
+                        + "외부에서 직접 재처리 호출을 할 수 없습니다. 이 메시지를 전달한 상위(진입) iFlow의 MPL 로그에서 재처리해주세요.";
+
+                ReprocessHistory history = ReprocessHistory.builder()
+                        .tenantId(request.tenantId())
+                        .tenantName(tenant.getName())
+                        .artifactId(request.artifactId())
+                        .artifactName(artifactName)
+                        .messageId(request.messageId())
+                        .storageType(request.storageType())
+                        .storageName(request.storageName())
+                        .status(ReprocessStatus.FAILED)
+                        .statusMessage(processDirectMessage)
+                        .reprocessedAt(now)
+                        .reprocessedBy(reprocessedBy)
+                        .deepLinkUrl(deepLinkUrl)
+                        .endpointUrl(targetEndpointUrl)
+                        .httpStatusCode(null)
+                        .build();
+                ReprocessHistory savedHistory = reprocessHistoryRepository.save(history);
+
+                log.warn("ProcessDirect 어댑터 인터페이스로 재처리 요청됨 - 직접 호출 불가 안내 처리 - messageId: {}, artifactId: {}",
+                        request.messageId(), request.artifactId());
+
+                return new MessageReprocessResult(
+                        savedHistory.getId(),
+                        request.messageId(),
+                        false,
+                        processDirectMessage,
+                        request.storageType().name(),
+                        request.storageName(),
+                        now,
+                        deepLinkUrl,
+                        targetEndpointUrl,
+                        null);
+            }
 
             // 호출 가능한 인터페이스 URL이 존재하지 않는 경우 (미배포 또는 노출 URL 없음)
             if (targetEndpointUrl == null || targetEndpointUrl.isBlank()) {
@@ -427,11 +472,6 @@ public class MessageReprocessService {
                     payload = fetchBinaryPayload(tenant, request.messageId());
                 }
 
-                ProtocolType protocolType = request.protocolType() != null
-                        ? request.protocolType()
-                        : (resolvedEndpoint.protocolType() != null ? resolvedEndpoint.protocolType() : ProtocolType.HTTP);
-                log.info("재처리 호출 프로토콜 결정 - messageId: {}, protocolType: {} (요청 명시: {}, SAP 자동판별: {})",
-                        request.messageId(), protocolType, request.protocolType(), resolvedEndpoint.protocolType());
                 MessageSender messageSender = resolveMessageSender(protocolType);
                 ResponseEntity<String> response = messageSender.send(
                         tenant, targetEndpointUrl, payload, request.soapAction()
@@ -712,15 +752,23 @@ public class MessageReprocessService {
     }
 
     /**
-     * SAP OData {@code ServiceEndpoints.Protocol} 원본 값(예: "HTTP", "SOAP", "SOAP 1.1", "REST")을
-     * 현재 지원하는 {@link ProtocolType}으로 매핑한다. "SOAP"을 포함하면 SOAP, 그 외(HTTP/REST/HTTPS 등)는
-     * HTTP로 취급하고, 값이 없으면(null) 호출부에서 명시적 지정 또는 기본값(HTTP)으로 폴백하도록 null을 반환한다.
+     * SAP OData {@code ServiceEndpoints.Protocol} 원본 값(예: "HTTP", "SOAP", "SOAP 1.1", "REST",
+     * "ProcessDirect")을 현재 지원하는 {@link ProtocolType}으로 매핑한다. "SOAP"을 포함하면 SOAP,
+     * "ProcessDirect"를 포함하면 PROCESS_DIRECT, 그 외(HTTP/REST/HTTPS 등)는 HTTP로 취급하고,
+     * 값이 없으면(null) 호출부에서 명시적 지정 또는 기본값(HTTP)으로 폴백하도록 null을 반환한다.
      */
     private ProtocolType mapProtocol(String rawProtocol) {
         if (rawProtocol == null || rawProtocol.isBlank()) {
             return null;
         }
-        return rawProtocol.toUpperCase().contains("SOAP") ? ProtocolType.SOAP : ProtocolType.HTTP;
+        String normalized = rawProtocol.toUpperCase().replace(" ", "").replace("-", "").replace("_", "");
+        if (normalized.contains("SOAP")) {
+            return ProtocolType.SOAP;
+        }
+        if (normalized.contains("PROCESSDIRECT")) {
+            return ProtocolType.PROCESS_DIRECT;
+        }
+        return ProtocolType.HTTP;
     }
 
     private record ResolvedEndpoint(String url, ProtocolType protocolType) {
