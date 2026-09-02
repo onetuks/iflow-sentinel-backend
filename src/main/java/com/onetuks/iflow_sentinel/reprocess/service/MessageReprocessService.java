@@ -378,7 +378,8 @@ public class MessageReprocessService {
 
         // 1. DataStore 메시지 재처리 또는 페이로드가 명시된 재처리 요청: 인터페이스 직접 호출 실행
         if (request.storageType() == StorageType.DATASTORE || (request.payload() != null && !request.payload().isBlank())) {
-            String targetEndpointUrl = resolveInterfaceEndpointUrl(tenant, artifact, request.endpointUrl());
+            ResolvedEndpoint resolvedEndpoint = resolveInterfaceEndpoint(tenant, artifact, request.endpointUrl());
+            String targetEndpointUrl = resolvedEndpoint.url();
 
             // 호출 가능한 인터페이스 URL이 존재하지 않는 경우 (미배포 또는 노출 URL 없음)
             if (targetEndpointUrl == null || targetEndpointUrl.isBlank()) {
@@ -426,7 +427,11 @@ public class MessageReprocessService {
                     payload = fetchBinaryPayload(tenant, request.messageId());
                 }
 
-                ProtocolType protocolType = request.protocolType() != null ? request.protocolType() : ProtocolType.HTTP;
+                ProtocolType protocolType = request.protocolType() != null
+                        ? request.protocolType()
+                        : (resolvedEndpoint.protocolType() != null ? resolvedEndpoint.protocolType() : ProtocolType.HTTP);
+                log.info("재처리 호출 프로토콜 결정 - messageId: {}, protocolType: {} (요청 명시: {}, SAP 자동판별: {})",
+                        request.messageId(), protocolType, request.protocolType(), resolvedEndpoint.protocolType());
                 MessageSender messageSender = resolveMessageSender(protocolType);
                 ResponseEntity<String> response = messageSender.send(
                         tenant, targetEndpointUrl, payload, request.soapAction()
@@ -565,21 +570,30 @@ public class MessageReprocessService {
     }
 
     /**
-     * iFlow 인터페이스의 호출 엔드포인트 URL을 탐색한다.
-     * 1) 요청에 직접 전달된 endpointUrl
+     * iFlow 인터페이스의 호출 엔드포인트 URL을 탐색한다. 프로토콜 자동판별이 필요 없는 호출부를 위한 얇은 래퍼.
+     * @see #resolveInterfaceEndpoint(Tenant, Artifact, String)
+     */
+    public String resolveInterfaceEndpointUrl(Tenant tenant, Artifact artifact, String requestedEndpointUrl) {
+        return resolveInterfaceEndpoint(tenant, artifact, requestedEndpointUrl).url();
+    }
+
+    /**
+     * iFlow 인터페이스의 호출 엔드포인트 URL과, SAP OData {@code /ServiceEndpoints}의 {@code Protocol}
+     * 필드로부터 판별한 호출 프로토콜을 함께 탐색한다.
+     * 1) 요청에 직접 전달된 endpointUrl (SAP 메타데이터가 없으므로 protocolType은 null)
      * 2) SAP OData /ServiceEndpoints?$filter=Name eq '{name}'&$expand=EntryPoints 직접 조회 (1순위)
      * 3) SAP OData /IntegrationRuntimeArtifacts('{sapArtifactId}')/ServiceEndpoints 직접 조회 (2순위)
      * 4) SAP OData 전체 /ServiceEndpoints 목록 조회 매칭 (3순위)
      * 5) SAP OData 배포된 런타임 아티팩트 목록(/IntegrationRuntimeArtifacts) 탐색 후 해당 엔드포인트 조회 (4순위)
-     * 6) 탐색 실패 시 임의 가상 URL을 생성하지 않고 null 반환
+     * 6) 탐색 실패 시 임의 가상 URL을 생성하지 않고 빈 결과 반환
      */
-    public String resolveInterfaceEndpointUrl(Tenant tenant, Artifact artifact, String requestedEndpointUrl) {
+    private ResolvedEndpoint resolveInterfaceEndpoint(Tenant tenant, Artifact artifact, String requestedEndpointUrl) {
         if (requestedEndpointUrl != null && !requestedEndpointUrl.isBlank()) {
-            return requestedEndpointUrl.trim();
+            return new ResolvedEndpoint(requestedEndpointUrl.trim(), null);
         }
 
         if (artifact == null) {
-            return null;
+            return ResolvedEndpoint.EMPTY;
         }
 
         String sapArtId = artifact.getSapArtifactId();
@@ -602,8 +616,9 @@ public class MessageReprocessService {
                     for (var ep : filteredEndpoints) {
                         String resolvedUrl = ep.resolveUrl();
                         if (resolvedUrl != null && !resolvedUrl.isBlank()) {
-                            log.info("ServiceEndpoints 필터 조회($filter=Name eq '{}')를 통해 URL 확보 성공: {}", candidateName, resolvedUrl);
-                            return resolvedUrl;
+                            log.info("ServiceEndpoints 필터 조회($filter=Name eq '{}')를 통해 URL 확보 성공: {} (Protocol: {})",
+                                    candidateName, resolvedUrl, ep.Protocol());
+                            return new ResolvedEndpoint(resolvedUrl, mapProtocol(ep.Protocol()));
                         }
                         // EntryPoints 별도 호출 폴백
                         if (ep.Id() != null && !ep.Id().isBlank()) {
@@ -611,8 +626,9 @@ public class MessageReprocessService {
                             if (entryPoints != null && !entryPoints.isEmpty()) {
                                 for (var entryPoint : entryPoints) {
                                     if (entryPoint.Url() != null && !entryPoint.Url().isBlank()) {
-                                        log.info("ServiceEndpoints EntryPoints 조회를 통해 URL 확보 성공: {}", entryPoint.Url());
-                                        return entryPoint.Url().trim();
+                                        log.info("ServiceEndpoints EntryPoints 조회를 통해 URL 확보 성공: {} (Protocol: {})",
+                                                entryPoint.Url(), ep.Protocol());
+                                        return new ResolvedEndpoint(entryPoint.Url().trim(), mapProtocol(ep.Protocol()));
                                     }
                                 }
                             }
@@ -633,7 +649,7 @@ public class MessageReprocessService {
                     for (var ep : runtimeEndpoints) {
                         String resolvedUrl = ep.resolveUrl();
                         if (resolvedUrl != null && !resolvedUrl.isBlank()) {
-                            return resolvedUrl;
+                            return new ResolvedEndpoint(resolvedUrl, mapProtocol(ep.Protocol()));
                         }
                     }
                 }
@@ -654,7 +670,7 @@ public class MessageReprocessService {
                                 || (artName != null && ep.Name().contains(artName))) {
                             String resolvedUrl = ep.resolveUrl();
                             if (resolvedUrl != null && !resolvedUrl.isBlank()) {
-                                return resolvedUrl;
+                                return new ResolvedEndpoint(resolvedUrl, mapProtocol(ep.Protocol()));
                             }
                         }
                     }
@@ -680,7 +696,7 @@ public class MessageReprocessService {
                             for (var ep : epList) {
                                 String resolvedUrl = ep.resolveUrl();
                                 if (resolvedUrl != null && !resolvedUrl.isBlank()) {
-                                    return resolvedUrl;
+                                    return new ResolvedEndpoint(resolvedUrl, mapProtocol(ep.Protocol()));
                                 }
                             }
                         }
@@ -691,8 +707,24 @@ public class MessageReprocessService {
             log.warn("배포된 Runtime Artifact 탐색 및 ServiceEndpoints 조회 실패: {}", e.getMessage());
         }
 
-        // 5. 어떤 방법으로도 런타임 엔드포인트를 찾을 수 없는 경우 null 반환
-        return null;
+        // 5. 어떤 방법으로도 런타임 엔드포인트를 찾을 수 없는 경우 빈 결과 반환
+        return ResolvedEndpoint.EMPTY;
+    }
+
+    /**
+     * SAP OData {@code ServiceEndpoints.Protocol} 원본 값(예: "HTTP", "SOAP", "SOAP 1.1", "REST")을
+     * 현재 지원하는 {@link ProtocolType}으로 매핑한다. "SOAP"을 포함하면 SOAP, 그 외(HTTP/REST/HTTPS 등)는
+     * HTTP로 취급하고, 값이 없으면(null) 호출부에서 명시적 지정 또는 기본값(HTTP)으로 폴백하도록 null을 반환한다.
+     */
+    private ProtocolType mapProtocol(String rawProtocol) {
+        if (rawProtocol == null || rawProtocol.isBlank()) {
+            return null;
+        }
+        return rawProtocol.toUpperCase().contains("SOAP") ? ProtocolType.SOAP : ProtocolType.HTTP;
+    }
+
+    private record ResolvedEndpoint(String url, ProtocolType protocolType) {
+        private static final ResolvedEndpoint EMPTY = new ResolvedEndpoint(null, null);
     }
 
     private MessageSender resolveMessageSender(ProtocolType protocolType) {
