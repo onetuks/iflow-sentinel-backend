@@ -378,56 +378,10 @@ public class MessageReprocessService {
 
         // 1. DataStore 메시지 재처리 또는 페이로드가 명시된 재처리 요청: 인터페이스 직접 호출 실행
         if (request.storageType() == StorageType.DATASTORE || (request.payload() != null && !request.payload().isBlank())) {
-            ResolvedEndpoint resolvedEndpoint = resolveInterfaceEndpoint(tenant, artifact, request.endpointUrl());
-            String targetEndpointUrl = resolvedEndpoint.url();
-            ProtocolType protocolType = request.protocolType() != null
-                    ? request.protocolType()
-                    : (resolvedEndpoint.protocolType() != null ? resolvedEndpoint.protocolType() : ProtocolType.HTTP);
-            log.info("재처리 호출 프로토콜 결정 - messageId: {}, protocolType: {} (요청 명시: {}, SAP 자동판별: {})",
-                    request.messageId(), protocolType, request.protocolType(), resolvedEndpoint.protocolType());
+            List<ResolvedEndpoint> candidates = resolveInterfaceEndpoints(tenant, artifact, request.endpointUrl());
 
-            // ProcessDirect는 같은 테넌트 내부 iFlow 간 전용 어댑터라 외부에서 직접 재호출할 수 없다.
-            // 호출을 시도조차 하지 않고, 잘못된 프로토콜 호출로 인터페이스 측 에러가 발생하는 것을 사전에 막는다.
-            if (protocolType == ProtocolType.PROCESS_DIRECT) {
-                String processDirectMessage = "이 인터페이스는 ProcessDirect(내부 전용) 어댑터로 구성되어 있어 "
-                        + "외부에서 직접 재처리 호출을 할 수 없습니다. 이 메시지를 전달한 상위(진입) iFlow의 MPL 로그에서 재처리해주세요.";
-
-                ReprocessHistory history = ReprocessHistory.builder()
-                        .tenantId(request.tenantId())
-                        .tenantName(tenant.getName())
-                        .artifactId(request.artifactId())
-                        .artifactName(artifactName)
-                        .messageId(request.messageId())
-                        .storageType(request.storageType())
-                        .storageName(request.storageName())
-                        .status(ReprocessStatus.FAILED)
-                        .statusMessage(processDirectMessage)
-                        .reprocessedAt(now)
-                        .reprocessedBy(reprocessedBy)
-                        .deepLinkUrl(deepLinkUrl)
-                        .endpointUrl(targetEndpointUrl)
-                        .httpStatusCode(null)
-                        .build();
-                ReprocessHistory savedHistory = reprocessHistoryRepository.save(history);
-
-                log.warn("ProcessDirect 어댑터 인터페이스로 재처리 요청됨 - 직접 호출 불가 안내 처리 - messageId: {}, artifactId: {}",
-                        request.messageId(), request.artifactId());
-
-                return new MessageReprocessResult(
-                        savedHistory.getId(),
-                        request.messageId(),
-                        false,
-                        processDirectMessage,
-                        request.storageType().name(),
-                        request.storageName(),
-                        now,
-                        deepLinkUrl,
-                        targetEndpointUrl,
-                        null);
-            }
-
-            // 호출 가능한 인터페이스 URL이 존재하지 않는 경우 (미배포 또는 노출 URL 없음)
-            if (targetEndpointUrl == null || targetEndpointUrl.isBlank()) {
+            // 호출 가능한 인터페이스 URL이 하나도 없는 경우 (미배포 또는 노출 URL 없음)
+            if (candidates.isEmpty()) {
                 String noUrlMessage = "호출 가능한 인터페이스 엔드포인트 URL을 찾을 수 없습니다. SAP에 해당 아티팩트가 배포되어 활성화되어 있는지 확인해주세요.";
                 int noUrlStatusCode = 404;
 
@@ -465,58 +419,96 @@ public class MessageReprocessService {
                         noUrlStatusCode);
             }
 
-            try {
-                // 페이로드 확보
-                String payload = request.payload();
-                if (payload == null || payload.isBlank()) {
-                    payload = fetchBinaryPayload(tenant, request.messageId());
+            // 페이로드 확보 (여러 엔드포인트 후보에 동일하게 재사용)
+            String payload = request.payload();
+            if (payload == null || payload.isBlank()) {
+                payload = fetchBinaryPayload(tenant, request.messageId());
+            }
+
+            // 2. 후보 엔드포인트를 우선순위 순서대로 하나씩 호출 시도한다. 하나가 실패하면 다음 후보로 넘어가고,
+            //    모든 후보가 실패(또는 ProcessDirect라 애초에 호출 불가)한 경우에만 최종 실패로 판단한다.
+            List<String> attemptLogs = new ArrayList<>();
+            boolean anyAttempted = false;
+            String lastAttemptedUrl = null;
+            Integer lastHttpStatus = null;
+
+            for (int i = 0; i < candidates.size(); i++) {
+                ResolvedEndpoint candidate = candidates.get(i);
+                ProtocolType protocolType = request.protocolType() != null
+                        ? request.protocolType()
+                        : (candidate.protocolType() != null ? candidate.protocolType() : ProtocolType.HTTP);
+
+                // ProcessDirect는 같은 테넌트 내부 iFlow 간 전용 어댑터라 외부에서 직접 재호출할 수 없다.
+                // 호출을 시도조차 하지 않고, 잘못된 프로토콜 호출로 인터페이스 측 에러가 발생하는 것을 사전에 막는다.
+                if (protocolType == ProtocolType.PROCESS_DIRECT) {
+                    log.info("ProcessDirect 엔드포인트는 직접 호출 대상에서 제외 - messageId: {}, endpoint: {}",
+                            request.messageId(), candidate.url());
+                    attemptLogs.add(candidate.url() + " -> 제외(ProcessDirect 내부 전용 어댑터)");
+                    continue;
                 }
 
-                MessageSender messageSender = resolveMessageSender(protocolType);
-                ResponseEntity<String> response = messageSender.send(
-                        tenant, targetEndpointUrl, payload, request.soapAction()
-                );
+                anyAttempted = true;
+                lastAttemptedUrl = candidate.url();
+                log.info("재처리 호출 시도 {}/{} - messageId: {}, endpoint: {}, protocolType: {}",
+                        i + 1, candidates.size(), request.messageId(), candidate.url(), protocolType);
 
-                int statusCode = response.getStatusCode().value();
-                String successMessage = "인터페이스 직접 호출 재처리 성공 [HTTP " + statusCode + "] - Endpoint: " + targetEndpointUrl;
+                try {
+                    MessageSender messageSender = resolveMessageSender(protocolType);
+                    ResponseEntity<String> response = messageSender.send(
+                            tenant, candidate.url(), payload, request.soapAction()
+                    );
 
-                ReprocessHistory history = ReprocessHistory.builder()
-                        .tenantId(request.tenantId())
-                        .tenantName(tenant.getName())
-                        .artifactId(request.artifactId())
-                        .artifactName(artifactName)
-                        .messageId(request.messageId())
-                        .storageType(request.storageType())
-                        .storageName(request.storageName())
-                        .status(ReprocessStatus.SUCCESS)
-                        .statusMessage(successMessage)
-                        .reprocessedAt(now)
-                        .reprocessedBy(reprocessedBy)
-                        .deepLinkUrl(deepLinkUrl)
-                        .endpointUrl(targetEndpointUrl)
-                        .httpStatusCode(statusCode)
-                        .build();
-                ReprocessHistory savedHistory = reprocessHistoryRepository.save(history);
+                    int statusCode = response.getStatusCode().value();
+                    String successMessage = "인터페이스 직접 호출 재처리 성공 [HTTP " + statusCode + "] - Endpoint: " + candidate.url()
+                            + (candidates.size() > 1
+                                    ? " (엔드포인트 " + candidates.size() + "개 중 " + (i + 1) + "번째 시도에서 성공)"
+                                    : "");
 
-                log.info("인터페이스 직접 호출 메시지 재처리 성공 및 히스토리 저장 완료 - historyId: {}, messageId: {}, endpoint: {}",
-                        savedHistory.getId(), request.messageId(), targetEndpointUrl);
+                    ReprocessHistory history = ReprocessHistory.builder()
+                            .tenantId(request.tenantId())
+                            .tenantName(tenant.getName())
+                            .artifactId(request.artifactId())
+                            .artifactName(artifactName)
+                            .messageId(request.messageId())
+                            .storageType(request.storageType())
+                            .storageName(request.storageName())
+                            .status(ReprocessStatus.SUCCESS)
+                            .statusMessage(successMessage)
+                            .reprocessedAt(now)
+                            .reprocessedBy(reprocessedBy)
+                            .deepLinkUrl(deepLinkUrl)
+                            .endpointUrl(candidate.url())
+                            .httpStatusCode(statusCode)
+                            .build();
+                    ReprocessHistory savedHistory = reprocessHistoryRepository.save(history);
 
-                return new MessageReprocessResult(
-                        savedHistory.getId(),
-                        request.messageId(),
-                        true,
-                        successMessage,
-                        request.storageType().name(),
-                        request.storageName(),
-                        now,
-                        deepLinkUrl,
-                        targetEndpointUrl,
-                        statusCode);
-            } catch (Exception e) {
-                String failureMessage = "인터페이스 직접 호출 재처리 실패: " + e.getMessage();
-                Integer httpStatus = (e instanceof ConnectorException ce) ? ce.getStatusCode() : null;
-                log.error("인터페이스 직접 호출 재처리 실패 - messageId: {}, endpoint: {}, 사유: {}",
-                        request.messageId(), targetEndpointUrl, failureMessage, e);
+                    log.info("인터페이스 직접 호출 메시지 재처리 성공 및 히스토리 저장 완료 - historyId: {}, messageId: {}, endpoint: {}",
+                            savedHistory.getId(), request.messageId(), candidate.url());
+
+                    return new MessageReprocessResult(
+                            savedHistory.getId(),
+                            request.messageId(),
+                            true,
+                            successMessage,
+                            request.storageType().name(),
+                            request.storageName(),
+                            now,
+                            deepLinkUrl,
+                            candidate.url(),
+                            statusCode);
+                } catch (Exception e) {
+                    Integer httpStatus = (e instanceof ConnectorException ce) ? ce.getStatusCode() : null;
+                    lastHttpStatus = httpStatus;
+                    log.warn("엔드포인트 호출 실패, 다음 후보로 재시도 - messageId: {}, endpoint: {}, 사유: {}",
+                            request.messageId(), candidate.url(), e.getMessage(), e);
+                    attemptLogs.add(candidate.url() + " -> " + e.getMessage());
+                }
+            }
+
+            // 3. 호출 가능한 후보가 아예 없었던 경우 (전부 ProcessDirect) — ProcessDirect 전용 안내 메시지 반환
+            if (!anyAttempted) {
+                String processDirectMessage = "이 인터페이스는 ProcessDirect(내부 전용) 어댑터로만 구성되어 있어 "
+                        + "외부에서 직접 재처리 호출을 할 수 없습니다. 이 메시지를 전달한 상위(진입) iFlow의 MPL 로그에서 재처리해주세요.";
 
                 ReprocessHistory history = ReprocessHistory.builder()
                         .tenantId(request.tenantId())
@@ -527,27 +519,66 @@ public class MessageReprocessService {
                         .storageType(request.storageType())
                         .storageName(request.storageName())
                         .status(ReprocessStatus.FAILED)
-                        .statusMessage(failureMessage)
+                        .statusMessage(processDirectMessage)
                         .reprocessedAt(now)
                         .reprocessedBy(reprocessedBy)
                         .deepLinkUrl(deepLinkUrl)
-                        .endpointUrl(targetEndpointUrl)
-                        .httpStatusCode(httpStatus)
+                        .endpointUrl(candidates.get(0).url())
+                        .httpStatusCode(null)
                         .build();
                 ReprocessHistory savedHistory = reprocessHistoryRepository.save(history);
+
+                log.warn("ProcessDirect 어댑터 인터페이스로 재처리 요청됨 - 직접 호출 불가 안내 처리 - messageId: {}, artifactId: {}",
+                        request.messageId(), request.artifactId());
 
                 return new MessageReprocessResult(
                         savedHistory.getId(),
                         request.messageId(),
                         false,
-                        failureMessage,
+                        processDirectMessage,
                         request.storageType().name(),
                         request.storageName(),
                         now,
                         deepLinkUrl,
-                        targetEndpointUrl,
-                        httpStatus);
+                        candidates.get(0).url(),
+                        null);
             }
+
+            // 4. 시도한 모든 후보 엔드포인트 호출이 실패한 경우에만 최종 실패로 판단한다.
+            String failureMessage = "모든 인터페이스 엔드포인트(" + candidates.size() + "개) 호출이 실패했습니다: "
+                    + String.join(" | ", attemptLogs);
+            log.error("인터페이스 직접 호출 재처리 최종 실패 - messageId: {}, 시도한 엔드포인트 수: {}, 사유: {}",
+                    request.messageId(), candidates.size(), failureMessage);
+
+            ReprocessHistory history = ReprocessHistory.builder()
+                    .tenantId(request.tenantId())
+                    .tenantName(tenant.getName())
+                    .artifactId(request.artifactId())
+                    .artifactName(artifactName)
+                    .messageId(request.messageId())
+                    .storageType(request.storageType())
+                    .storageName(request.storageName())
+                    .status(ReprocessStatus.FAILED)
+                    .statusMessage(failureMessage)
+                    .reprocessedAt(now)
+                    .reprocessedBy(reprocessedBy)
+                    .deepLinkUrl(deepLinkUrl)
+                    .endpointUrl(lastAttemptedUrl)
+                    .httpStatusCode(lastHttpStatus)
+                    .build();
+            ReprocessHistory savedHistory = reprocessHistoryRepository.save(history);
+
+            return new MessageReprocessResult(
+                    savedHistory.getId(),
+                    request.messageId(),
+                    false,
+                    failureMessage,
+                    request.storageType().name(),
+                    request.storageName(),
+                    now,
+                    deepLinkUrl,
+                    lastAttemptedUrl,
+                    lastHttpStatus);
         } else {
             // 페이로드가 명시되지 않은 순수 JMS 큐 메시지는 Web UI 매핑 안내 반환 및 히스토리 기록
             String jmsMessage = "JMS 큐 (" + request.storageName() + ") 메시지 재처리를 위해 SAP IS Manage Queues 바로가기 링크가 생성되었습니다.";
@@ -610,30 +641,35 @@ public class MessageReprocessService {
     }
 
     /**
-     * iFlow 인터페이스의 호출 엔드포인트 URL을 탐색한다. 프로토콜 자동판별이 필요 없는 호출부를 위한 얇은 래퍼.
-     * @see #resolveInterfaceEndpoint(Tenant, Artifact, String)
+     * iFlow 인터페이스의 호출 엔드포인트 URL을 탐색한다. 프로토콜 자동판별/다중 엔드포인트 재시도가
+     * 필요 없는 호출부를 위한 얇은 래퍼로, 가장 우선순위 높은 후보 하나만 반환한다.
+     * @see #resolveInterfaceEndpoints(Tenant, Artifact, String)
      */
     public String resolveInterfaceEndpointUrl(Tenant tenant, Artifact artifact, String requestedEndpointUrl) {
-        return resolveInterfaceEndpoint(tenant, artifact, requestedEndpointUrl).url();
+        List<ResolvedEndpoint> resolved = resolveInterfaceEndpoints(tenant, artifact, requestedEndpointUrl);
+        return resolved.isEmpty() ? null : resolved.get(0).url();
     }
 
     /**
-     * iFlow 인터페이스의 호출 엔드포인트 URL과, SAP OData {@code /ServiceEndpoints}의 {@code Protocol}
-     * 필드로부터 판별한 호출 프로토콜을 함께 탐색한다.
-     * 1) 요청에 직접 전달된 endpointUrl (SAP 메타데이터가 없으므로 protocolType은 null)
+     * iFlow 인터페이스의 호출 가능한 엔드포인트 URL 후보 전부와, SAP OData {@code /ServiceEndpoints}의
+     * {@code Protocol} 필드로부터 판별한 호출 프로토콜을 함께 탐색한다. 재처리 시 한 후보가 실패하면
+     * 다음 후보로 재시도할 수 있도록 우선순위 순서로 반환한다(같은 URL은 중복 없이 한 번만 포함).
+     * 아래 탐색 방식을 우선순위대로 시도하되, 어느 한 방식에서 후보를 찾으면 그보다 낮은 우선순위 방식은
+     * 시도하지 않는다(서로 다른 방식이 별개의 인터페이스를 오탐할 수 있어 뒤섞지 않는다):
+     * 1) 요청에 직접 전달된 endpointUrl (SAP 메타데이터가 없으므로 protocolType은 null, 후보 1개)
      * 2) SAP OData /ServiceEndpoints?$filter=Name eq '{name}'&$expand=EntryPoints 직접 조회 (1순위)
      * 3) SAP OData /IntegrationRuntimeArtifacts('{sapArtifactId}')/ServiceEndpoints 직접 조회 (2순위)
      * 4) SAP OData 전체 /ServiceEndpoints 목록 조회 매칭 (3순위)
      * 5) SAP OData 배포된 런타임 아티팩트 목록(/IntegrationRuntimeArtifacts) 탐색 후 해당 엔드포인트 조회 (4순위)
-     * 6) 탐색 실패 시 임의 가상 URL을 생성하지 않고 빈 결과 반환
+     * 6) 탐색 실패 시 임의 가상 URL을 생성하지 않고 빈 목록 반환
      */
-    private ResolvedEndpoint resolveInterfaceEndpoint(Tenant tenant, Artifact artifact, String requestedEndpointUrl) {
+    private List<ResolvedEndpoint> resolveInterfaceEndpoints(Tenant tenant, Artifact artifact, String requestedEndpointUrl) {
         if (requestedEndpointUrl != null && !requestedEndpointUrl.isBlank()) {
-            return new ResolvedEndpoint(requestedEndpointUrl.trim(), null);
+            return List.of(new ResolvedEndpoint(requestedEndpointUrl.trim(), null));
         }
 
         if (artifact == null) {
-            return ResolvedEndpoint.EMPTY;
+            return List.of();
         }
 
         String sapArtId = artifact.getSapArtifactId();
@@ -648,17 +684,19 @@ public class MessageReprocessService {
             candidateNames.add(sapArtId);
         }
 
+        List<ResolvedEndpoint> tier1 = new ArrayList<>();
         for (String candidateName : candidateNames) {
             try {
                 List<SapServiceEndpointDto> filteredEndpoints =
                         sapODataClient.getServiceEndpointsByName(tenant, candidateName);
                 if (filteredEndpoints != null && !filteredEndpoints.isEmpty()) {
                     for (var ep : filteredEndpoints) {
-                        String resolvedUrl = ep.resolveUrl();
-                        if (resolvedUrl != null && !resolvedUrl.isBlank()) {
+                        List<String> resolvedUrls = ep.resolveAllUrls();
+                        if (!resolvedUrls.isEmpty()) {
                             log.info("ServiceEndpoints 필터 조회($filter=Name eq '{}')를 통해 URL 확보 성공: {} (Protocol: {})",
-                                    candidateName, resolvedUrl, ep.Protocol());
-                            return new ResolvedEndpoint(resolvedUrl, mapProtocol(ep.Protocol()));
+                                    candidateName, resolvedUrls, ep.Protocol());
+                            addResolvedEndpoints(tier1, resolvedUrls, mapProtocol(ep.Protocol()));
+                            continue;
                         }
                         // EntryPoints 별도 호출 폴백
                         if (ep.Id() != null && !ep.Id().isBlank()) {
@@ -668,7 +706,7 @@ public class MessageReprocessService {
                                     if (entryPoint.Url() != null && !entryPoint.Url().isBlank()) {
                                         log.info("ServiceEndpoints EntryPoints 조회를 통해 URL 확보 성공: {} (Protocol: {})",
                                                 entryPoint.Url(), ep.Protocol());
-                                        return new ResolvedEndpoint(entryPoint.Url().trim(), mapProtocol(ep.Protocol()));
+                                        addResolvedEndpoint(tier1, entryPoint.Url().trim(), mapProtocol(ep.Protocol()));
                                     }
                                 }
                             }
@@ -679,26 +717,31 @@ public class MessageReprocessService {
                 log.debug("ServiceEndpoints Name 필터({}) 조회 실패: {}", candidateName, e.getMessage());
             }
         }
+        if (!tier1.isEmpty()) {
+            return tier1;
+        }
 
         // 2. 배포된 런타임 아티팩트에서 직접 ServiceEndpoints 조회 시도 (2순위: sapArtifactId)
         if (sapArtId != null && !sapArtId.isBlank()) {
+            List<ResolvedEndpoint> tier2 = new ArrayList<>();
             try {
                 List<SapServiceEndpointDto> runtimeEndpoints =
                         sapODataClient.getServiceEndpointsForRuntimeArtifact(tenant, sapArtId);
                 if (runtimeEndpoints != null && !runtimeEndpoints.isEmpty()) {
                     for (var ep : runtimeEndpoints) {
-                        String resolvedUrl = ep.resolveUrl();
-                        if (resolvedUrl != null && !resolvedUrl.isBlank()) {
-                            return new ResolvedEndpoint(resolvedUrl, mapProtocol(ep.Protocol()));
-                        }
+                        addResolvedEndpoints(tier2, ep.resolveAllUrls(), mapProtocol(ep.Protocol()));
                     }
                 }
             } catch (Exception e) {
                 log.debug("특정 Runtime Artifact ID({}) 기반 ServiceEndpoints 조회 실패 (전체 목록 탐색 진행): {}", sapArtId, e.getMessage());
             }
+            if (!tier2.isEmpty()) {
+                return tier2;
+            }
         }
 
         // 3. 전체 배포된 ServiceEndpoints 목록을 조회하여 이름/ID 매칭 탐색 (3순위)
+        List<ResolvedEndpoint> tier3 = new ArrayList<>();
         try {
             List<SapServiceEndpointDto> endpoints =
                     sapODataClient.getServiceEndpoints(tenant);
@@ -708,10 +751,7 @@ public class MessageReprocessService {
                         if (ep.Name().equalsIgnoreCase(sapArtId) || ep.Name().equalsIgnoreCase(artName)
                                 || (sapArtId != null && ep.Name().contains(sapArtId))
                                 || (artName != null && ep.Name().contains(artName))) {
-                            String resolvedUrl = ep.resolveUrl();
-                            if (resolvedUrl != null && !resolvedUrl.isBlank()) {
-                                return new ResolvedEndpoint(resolvedUrl, mapProtocol(ep.Protocol()));
-                            }
+                            addResolvedEndpoints(tier3, ep.resolveAllUrls(), mapProtocol(ep.Protocol()));
                         }
                     }
                 }
@@ -719,8 +759,12 @@ public class MessageReprocessService {
         } catch (Exception e) {
             log.warn("SAP 전체 ServiceEndpoints 목록 조회 실패: {}", e.getMessage());
         }
+        if (!tier3.isEmpty()) {
+            return tier3;
+        }
 
         // 4. 배포된 런타임 아티팩트 목록(/IntegrationRuntimeArtifacts)에서 이름으로 매칭 후 해당 ID로 조회 시도 (4순위)
+        List<ResolvedEndpoint> tier4 = new ArrayList<>();
         try {
             List<SapRuntimeArtifactDto> runtimeArtifacts =
                     sapODataClient.getRuntimeArtifacts(tenant);
@@ -734,10 +778,7 @@ public class MessageReprocessService {
                                 sapODataClient.getServiceEndpointsForRuntimeArtifact(tenant, rArt.Id());
                         if (epList != null && !epList.isEmpty()) {
                             for (var ep : epList) {
-                                String resolvedUrl = ep.resolveUrl();
-                                if (resolvedUrl != null && !resolvedUrl.isBlank()) {
-                                    return new ResolvedEndpoint(resolvedUrl, mapProtocol(ep.Protocol()));
-                                }
+                                addResolvedEndpoints(tier4, ep.resolveAllUrls(), mapProtocol(ep.Protocol()));
                             }
                         }
                     }
@@ -746,9 +787,28 @@ public class MessageReprocessService {
         } catch (Exception e) {
             log.warn("배포된 Runtime Artifact 탐색 및 ServiceEndpoints 조회 실패: {}", e.getMessage());
         }
+        if (!tier4.isEmpty()) {
+            return tier4;
+        }
 
-        // 5. 어떤 방법으로도 런타임 엔드포인트를 찾을 수 없는 경우 빈 결과 반환
-        return ResolvedEndpoint.EMPTY;
+        // 5. 어떤 방법으로도 런타임 엔드포인트를 찾을 수 없는 경우 빈 목록 반환
+        return List.of();
+    }
+
+    private void addResolvedEndpoints(List<ResolvedEndpoint> target, List<String> urls, ProtocolType protocolType) {
+        for (String url : urls) {
+            addResolvedEndpoint(target, url, protocolType);
+        }
+    }
+
+    private void addResolvedEndpoint(List<ResolvedEndpoint> target, String url, ProtocolType protocolType) {
+        if (url == null || url.isBlank()) {
+            return;
+        }
+        boolean alreadyPresent = target.stream().anyMatch(existing -> existing.url().equals(url));
+        if (!alreadyPresent) {
+            target.add(new ResolvedEndpoint(url, protocolType));
+        }
     }
 
     /**
@@ -772,7 +832,6 @@ public class MessageReprocessService {
     }
 
     private record ResolvedEndpoint(String url, ProtocolType protocolType) {
-        private static final ResolvedEndpoint EMPTY = new ResolvedEndpoint(null, null);
     }
 
     private MessageSender resolveMessageSender(ProtocolType protocolType) {
